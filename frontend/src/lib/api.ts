@@ -42,10 +42,26 @@ export interface SummaryErrors {
   proxmox: string | null;
 }
 
+export interface BackupScanDiagnostic {
+  node: string;
+  storage: string;
+  type: string | null;
+  reason:
+    | 'content-backup'
+    | 'pbs-type'
+    | 'skipped-disabled'
+    | 'skipped-no-backup-content';
+  status: 'ok' | 'error' | 'skipped';
+  entryCount?: number;
+  vmidsSeen?: number[];
+  error?: string;
+}
+
 export interface SummaryResponse {
   targets: TargetSummary[];
   generatedAt: number;
   errors: SummaryErrors;
+  backupScan?: BackupScanDiagnostic[];
 }
 
 export async function fetchSummary(

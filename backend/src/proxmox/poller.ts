@@ -2,11 +2,14 @@ import type { AppConfig } from '../config';
 import { recordSample } from '../db';
 import {
   replaceByPrefix,
+  setBackupScan,
   setProxmoxError,
+  type BackupScanDiagnostic,
   type StoragePool,
   type TargetSummary,
 } from '../state';
 import { ProxmoxClient } from './client';
+import type { PveBackupEntry } from './types';
 
 /**
  * Polls Proxmox on a fixed interval and updates both the in-memory snapshot
@@ -78,6 +81,9 @@ export class ProxmoxPoller {
     /** vmid → count (aggregated across all backup storages on all nodes). */
     const backupsByVmid = new Map<number, number>();
 
+    /** Per-storage diagnostics so the UI can surface scan results. */
+    const scanDiag: BackupScanDiagnostic[] = [];
+
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       try {
@@ -112,36 +118,91 @@ export class ProxmoxPoller {
             return bv - av;
           });
 
-        // --- Backup counts: query every storage whose content includes 'backup' ---
-        const backupStorages = storages.filter(
-          s =>
-            s.enabled !== 0 &&
-            typeof s.content === 'string' &&
-            s.content.split(',').includes('backup'),
-        );
+        // --- Backup counts: query any storage that could plausibly hold backups.
+        // A storage is considered a "backup target" if EITHER:
+        //   (a) its content list includes 'backup' (classic dir/nfs/cifs with vzdumps), or
+        //   (b) its type is 'pbs' (Proxmox Backup Server — always backups-only).
+        // The previous filter only honored (a), which missed PBS datastores and
+        // any pool whose `content` field comes back blank/undefined from PVE.
+        // Explicitly-disabled storages (enabled === 0) are still skipped.
+        for (const s of storages) {
+          const contentTokens =
+            typeof s.content === 'string'
+              ? s.content.split(',').map(x => x.trim()).filter(Boolean)
+              : [];
+          const hasBackupContent = contentTokens.includes('backup');
+          const isPbs = s.type === 'pbs';
 
-        for (const bs of backupStorages) {
+          if (s.enabled === 0) {
+            scanDiag.push({
+              node: n.node,
+              storage: s.storage,
+              type: s.type ?? null,
+              reason: 'skipped-disabled',
+              status: 'skipped',
+            });
+            continue;
+          }
+
+          if (!hasBackupContent && !isPbs) {
+            // Not a backup target — don't probe and don't spam the diag list.
+            // We still emit a single row per such storage so the UI can
+            // explain *why* a pool was ignored if the user is wondering.
+            scanDiag.push({
+              node: n.node,
+              storage: s.storage,
+              type: s.type ?? null,
+              reason: 'skipped-no-backup-content',
+              status: 'skipped',
+            });
+            continue;
+          }
+
+          const reason: BackupScanDiagnostic['reason'] = hasBackupContent
+            ? 'content-backup'
+            : 'pbs-type';
+
           try {
             const entries = await this.client.nodeStorageBackups(
               n.node,
-              bs.storage,
+              s.storage,
             );
+            const vmidsSeen = new Set<number>();
             for (const e of entries) {
-              if (e.vmid != null) {
+              const vmid = extractVmid(e);
+              if (vmid != null) {
+                vmidsSeen.add(vmid);
                 backupsByVmid.set(
-                  e.vmid,
-                  (backupsByVmid.get(e.vmid) ?? 0) + 1,
+                  vmid,
+                  (backupsByVmid.get(vmid) ?? 0) + 1,
                 );
               }
             }
+            scanDiag.push({
+              node: n.node,
+              storage: s.storage,
+              type: s.type ?? null,
+              reason,
+              status: 'ok',
+              entryCount: entries.length,
+              vmidsSeen: Array.from(vmidsSeen).sort((a, b) => a - b),
+            });
           } catch (bsErr) {
-            // Per-storage failure shouldn't bring down the whole poll;
-            // just log and move on.
+            const msg =
+              bsErr instanceof Error ? bsErr.message : String(bsErr);
             // eslint-disable-next-line no-console
             console.warn(
-              `[proxmox] backup scan failed for storage=${bs.storage} node=${n.node}:`,
-              bsErr instanceof Error ? bsErr.message : String(bsErr),
+              `[proxmox] backup scan failed for storage=${s.storage} node=${n.node}:`,
+              msg,
             );
+            scanDiag.push({
+              node: n.node,
+              storage: s.storage,
+              type: s.type ?? null,
+              reason,
+              status: 'error',
+              error: msg,
+            });
           }
         }
 
@@ -288,5 +349,30 @@ export class ProxmoxPoller {
 
     replaceByPrefix('qemu-', vmTargets.filter(t => t.id.startsWith('qemu-')));
     replaceByPrefix('lxc-', vmTargets.filter(t => t.id.startsWith('lxc-')));
+
+    // Publish backup-scan diagnostics so the dashboard can show what was scanned.
+    setBackupScan(scanDiag);
   }
+}
+
+/**
+ * Best-effort vmid extraction from a PVE backup entry.
+ * Proxmox usually sets `vmid` on the entry, but some storage backends
+ * (older PBS, certain dir/nfs configurations) only return `volid` — the
+ * VM id is embedded in the path, e.g.:
+ *   local:backup/vzdump-qemu-101-2024_01_01-00_00_00.vma.zst
+ *   pbs-store:backup/vm/101/2024-01-01T00:00:00Z
+ *   local:backup/vzdump-lxc-200-...
+ * This covers both formats.
+ */
+function extractVmid(e: PveBackupEntry): number | null {
+  if (typeof e.vmid === 'number' && Number.isFinite(e.vmid)) return e.vmid;
+  if (typeof e.volid !== 'string') return null;
+  // PBS: ...:backup/{ct|vm}/{vmid}/...
+  const pbs = e.volid.match(/:backup\/(?:vm|ct)\/(\d+)\//);
+  if (pbs) return Number(pbs[1]);
+  // vzdump: ...vzdump-(qemu|lxc)-{vmid}-...
+  const vz = e.volid.match(/vzdump-(?:qemu|lxc)-(\d+)-/);
+  if (vz) return Number(vz[1]);
+  return null;
 }

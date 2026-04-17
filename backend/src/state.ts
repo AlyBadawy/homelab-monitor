@@ -41,15 +41,35 @@ export interface TargetSummary {
   error?: string;               // present when the last poll failed
 }
 
+/** Per-storage diagnostic from the most recent backup scan. */
+export interface BackupScanDiagnostic {
+  node: string;
+  storage: string;
+  type: string | null;
+  /** Why we considered this storage a backup target (or didn't). */
+  reason:
+    | 'content-backup'
+    | 'pbs-type'
+    | 'skipped-disabled'
+    | 'skipped-no-backup-content';
+  /** HTTP request outcome. Undefined if we didn't probe it. */
+  status: 'ok' | 'error' | 'skipped';
+  entryCount?: number;
+  vmidsSeen?: number[];
+  error?: string;
+}
+
 interface Snapshot {
   targets: Map<string, TargetSummary>;
   lastProxmoxError: string | null;
+  backupScan: BackupScanDiagnostic[];
   generatedAt: number;
 }
 
 const snapshot: Snapshot = {
   targets: new Map(),
   lastProxmoxError: null,
+  backupScan: [],
   generatedAt: 0,
 };
 
@@ -68,15 +88,22 @@ export function getSummary(): {
   targets: TargetSummary[];
   generatedAt: number;
   errors: { proxmox: string | null };
+  backupScan: BackupScanDiagnostic[];
 } {
   return {
     targets: Array.from(snapshot.targets.values()),
     generatedAt: snapshot.generatedAt,
     errors: { proxmox: snapshot.lastProxmoxError },
+    backupScan: snapshot.backupScan,
   };
 }
 
 export function setProxmoxError(err: string | null): void {
   snapshot.lastProxmoxError = err;
+  snapshot.generatedAt = Date.now();
+}
+
+export function setBackupScan(diag: BackupScanDiagnostic[]): void {
+  snapshot.backupScan = diag;
   snapshot.generatedAt = Date.now();
 }
