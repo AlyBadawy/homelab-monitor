@@ -28,7 +28,14 @@ export interface TargetSummary {
   cpuPct: number | null;
   memPct: number | null;
   diskPct: number | null;
+  /** When the backend knows disk usage isn't available (e.g. QEMU without guest agent). */
+  diskUnavailableReason?: string;
   uptimeSec: number | null;
+  /** Current network rates in bytes/sec; null on the first tick (no prior sample). */
+  netInBps?: number | null;
+  netOutBps?: number | null;
+  /** Number of backups found across every backup-content storage for this VM. */
+  backupCount?: number | null;
   storages?: StoragePool[];     // present on proxmox-host
   updatedAt: number;
   error?: string;               // present when the last poll failed

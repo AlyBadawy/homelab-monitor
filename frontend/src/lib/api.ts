@@ -28,7 +28,11 @@ export interface TargetSummary {
   cpuPct: number | null;
   memPct: number | null;
   diskPct: number | null;
+  diskUnavailableReason?: string;
   uptimeSec: number | null;
+  netInBps?: number | null;
+  netOutBps?: number | null;
+  backupCount?: number | null;
   storages?: StoragePool[];
   updatedAt: number;
   error?: string;

@@ -2,14 +2,20 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: Chunk 2 — Proxmox integration
+## Current status: Chunk 2.1 — Proxmox integration, expanded
 
 The dashboard now shows live data for:
 
-- **The Proxmox host** — CPU, memory, uptime, and a list of all active storage pools sorted by usage (biggest-used first)
-- **Every VM & LXC container** in the cluster, auto-discovered from `/cluster/resources`
+- **The Proxmox host** — CPU, memory, uptime, and a list of **every enabled storage pool** (NFS, PBS, dir, lvmthin, zfspool, …) sorted biggest-used first. Pools with unknown size show "—" rather than being hidden.
+- **Every VM & LXC container** — CPU, memory, disk (LXC only — see note), uptime, **live network ↓/↑ rate**, and **count of backups** found for that VMID across every backup-content storage.
 
 Data is polled every 10 seconds and 24 hours of samples are persisted to SQLite for future sparkline charts.
+
+### Known limitation: QEMU disk usage
+
+For QEMU VMs, the dashboard shows "—" for Disk with the hint *"guest agent not reporting"*. That's intentional — Proxmox's `/cluster/resources` only knows actual in-VM filesystem usage when the **qemu-guest-agent** is installed inside each VM. Install it (`apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` on Debian/Ubuntu, `dnf install qemu-guest-agent` on RHEL) and enable it on the VM's Options tab in Proxmox. A follow-up chunk will wire up `/agent/get-fsinfo` once the agent is in place on all your VMs.
+
+LXC containers don't need this — their Disk value is already real.
 
 Still to come: Portainer container stats, Postgres, Nextcloud, Immich, and the Unifi UNAS.
 
@@ -122,6 +128,8 @@ Metrics recorded per target today:
 - `cpu_pct`, `mem_pct` — for hosts, VMs, and containers
 - `rootfs_pct` — for the Proxmox host
 - `storage:<poolname>:used_pct` — one per active pool on the Proxmox host
+- `disk_pct` — for LXC containers (QEMU VMs will be added once guest-agent integration lands)
+- `net_in_bps`, `net_out_bps` — for VMs and containers
 
 ## Data model
 

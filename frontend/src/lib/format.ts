@@ -26,6 +26,21 @@ export function fmtBytes(n: number | null): string {
   return `${v.toFixed(decimals)} ${units[i]}`;
 }
 
+/** Format a bytes-per-second rate compactly (e.g. "4.2 MB/s", "812 KB/s"). */
+export function fmtRate(bps: number | null | undefined): string {
+  if (bps === null || bps === undefined || !Number.isFinite(bps)) return '—';
+  if (bps < 1) return '0 B/s';
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  let v = bps;
+  let i = 0;
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1000;
+    i++;
+  }
+  const decimals = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(decimals)} ${units[i]}`;
+}
+
 export function fmtRelative(ms: number): string {
   const diff = Date.now() - ms;
   if (diff < 1000) return 'just now';

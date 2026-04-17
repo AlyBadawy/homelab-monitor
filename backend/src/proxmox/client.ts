@@ -2,6 +2,7 @@ import { Agent, fetch, type RequestInit } from 'undici';
 import type { ProxmoxConfig } from '../config';
 import type {
   PveApiEnvelope,
+  PveBackupEntry,
   PveClusterResourceVm,
   PveNodeStatus,
   PveNodeSummary,
@@ -68,6 +69,20 @@ export class ProxmoxClient {
   nodeStorages(node: string): Promise<PveStorage[]> {
     return this.get<PveStorage[]>(
       `/nodes/${encodeURIComponent(node)}/storage`,
+    );
+  }
+
+  /**
+   * Backup entries on a specific storage for a specific node.
+   * Works for both PBS-type storages and file-based (dir/nfs) storages
+   * that hold vzdump files.
+   */
+  nodeStorageBackups(
+    node: string,
+    storage: string,
+  ): Promise<PveBackupEntry[]> {
+    return this.get<PveBackupEntry[]>(
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content?content=backup`,
     );
   }
 }

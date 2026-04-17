@@ -33,10 +33,23 @@ export interface PveClusterResourceVm {
   maxcpu?: number;
   mem?: number;        // bytes
   maxmem?: number;     // bytes
-  disk?: number;       // bytes (current usage, may be 0 if not reported)
+  disk?: number;       // bytes (for LXC: rootfs used; for QEMU: usually 0 unless
+                       // guest-agent provides it via a different endpoint)
   maxdisk?: number;    // bytes
   uptime?: number;     // seconds
+  netin?: number;      // cumulative bytes received since VM boot
+  netout?: number;     // cumulative bytes sent since VM boot
   tags?: string;
+}
+
+/** One entry in /nodes/{node}/storage/{storage}/content?content=backup */
+export interface PveBackupEntry {
+  volid: string;        // e.g. 'proxmox-backup:backup/vm/101/2024-01-01T00:00:00Z'
+  vmid?: number;        // when attributable to a VM
+  ctime?: number;       // epoch seconds
+  size?: number;        // bytes
+  format?: string;      // 'vma.zst', 'pbs-vm', ...
+  content: string;      // 'backup'
 }
 
 export interface PveStorage {

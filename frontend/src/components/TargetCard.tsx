@@ -4,13 +4,18 @@ import {
   Box,
   Database,
   HardDrive,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Archive,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 import type { TargetSummary, TargetKind } from '../lib/api';
 import { StatusPill } from './StatusPill';
 import { MetricBar } from './MetricBar';
 import { StoragePoolList } from './StoragePoolList';
-import { fmtUptime } from '../lib/format';
+import { MiniStat } from './MiniStat';
+import { fmtRate, fmtUptime } from '../lib/format';
 
 const KIND_ICON: Record<TargetKind, LucideIcon> = {
   'proxmox-host': Server,
@@ -37,6 +42,7 @@ interface TargetCardProps {
 export function TargetCard({ target, wide = false }: TargetCardProps) {
   const Icon = KIND_ICON[target.kind];
   const isHost = target.kind === 'proxmox-host';
+  const showMiniStats = target.kind === 'vm' || target.kind === 'container';
 
   return (
     <div className={`card group ${wide ? 'sm:col-span-2 xl:col-span-2' : ''}`}>
@@ -59,8 +65,56 @@ export function TargetCard({ target, wide = false }: TargetCardProps) {
       <div className="space-y-3">
         <MetricBar label="CPU" value={target.cpuPct} />
         <MetricBar label="Memory" value={target.memPct} />
-        {!isHost && <MetricBar label="Disk" value={target.diskPct} />}
+        {!isHost && (
+          <MetricBar
+            label="Disk"
+            value={target.diskPct}
+            unavailableReason={target.diskUnavailableReason}
+          />
+        )}
       </div>
+
+      {showMiniStats && (
+        <div className="mt-4 pt-3 border-t border-border">
+          <div className="grid grid-cols-2 gap-2">
+            <MiniStat
+              icon={ArrowDownToLine}
+              label="Net In"
+              value={fmtRate(target.netInBps)}
+              tone="cyan"
+              title="Current download rate"
+            />
+            <MiniStat
+              icon={ArrowUpFromLine}
+              label="Net Out"
+              value={fmtRate(target.netOutBps)}
+              tone="emerald"
+              title="Current upload rate"
+            />
+            <MiniStat
+              icon={Archive}
+              label="Backups"
+              value={
+                target.backupCount === null || target.backupCount === undefined
+                  ? '—'
+                  : String(target.backupCount)
+              }
+              tone={
+                target.backupCount && target.backupCount > 0
+                  ? 'muted'
+                  : 'amber'
+              }
+              title="Backups found across all backup-content storages"
+            />
+            <MiniStat
+              icon={Clock}
+              label="Uptime"
+              value={fmtUptime(target.uptimeSec)}
+              tone="muted"
+            />
+          </div>
+        </div>
+      )}
 
       {isHost && (
         <div className="mt-4 pt-3 border-t border-border">
@@ -71,14 +125,16 @@ export function TargetCard({ target, wide = false }: TargetCardProps) {
         </div>
       )}
 
-      <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-        <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
-          Uptime
-        </span>
-        <span className="font-mono text-xs text-text-muted">
-          {fmtUptime(target.uptimeSec)}
-        </span>
-      </div>
+      {!showMiniStats && (
+        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
+            Uptime
+          </span>
+          <span className="font-mono text-xs text-text-muted">
+            {fmtUptime(target.uptimeSec)}
+          </span>
+        </div>
+      )}
 
       {target.error && (
         <div className="mt-3 rounded-md border border-accent-rose/30 bg-accent-rose/5 px-2 py-1.5 font-mono text-[0.7rem] text-accent-rose">
