@@ -2,10 +2,9 @@ import type { AppConfig } from '../config';
 import { recordSample } from '../db';
 import {
   replaceByPrefix,
-  setBackupScan,
   setProxmoxError,
-  type BackupScanDiagnostic,
   type StoragePool,
+  type StoragePoolBackup,
   type TargetSummary,
 } from '../state';
 import { ProxmoxClient } from './client';
@@ -81,9 +80,6 @@ export class ProxmoxPoller {
     /** vmid → count (aggregated across all backup storages on all nodes). */
     const backupsByVmid = new Map<number, number>();
 
-    /** Per-storage diagnostics so the UI can surface scan results. */
-    const scanDiag: BackupScanDiagnostic[] = [];
-
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       try {
@@ -92,85 +88,35 @@ export class ProxmoxPoller {
           this.client.nodeStorages(n.node),
         ]);
 
-        // --- Storage pools for the host card ---
-        // Loosened filter: include any enabled storage, even if inactive or
-        // with zero reported total (e.g. NFS backup shares). The UI renders
-        // "—" for missing sizes.
-        const pools: StoragePool[] = storages
-          .filter(s => s.enabled !== 0)
-          .map(s => {
-            const used = s.used ?? null;
-            const total = s.total && s.total > 0 ? s.total : null;
-            const usedPct =
-              used != null && total != null ? (used / total) * 100 : null;
-            return {
-              name: s.storage,
-              type: s.type ?? null,
-              used,
-              total,
-              usedPct,
-            };
-          })
-          .sort((a, b) => {
-            // Biggest-used first, but keep pools with null% at the bottom.
-            const av = a.usedPct ?? -1;
-            const bv = b.usedPct ?? -1;
-            return bv - av;
-          });
-
-        // --- Backup counts: query any storage that could plausibly hold backups.
+        // --- Per-storage backup scan ---
         // A storage is considered a "backup target" if EITHER:
         //   (a) its content list includes 'backup' (classic dir/nfs/cifs with vzdumps), or
         //   (b) its type is 'pbs' (Proxmox Backup Server — always backups-only).
-        // The previous filter only honored (a), which missed PBS datastores and
-        // any pool whose `content` field comes back blank/undefined from PVE.
-        // Explicitly-disabled storages (enabled === 0) are still skipped.
+        // We probe only those and attach a `backup` field to the matching pool.
+        // Non-backup storages get `backup: null` and render without the extra line.
+        const backupByStorage = new Map<string, StoragePoolBackup>();
+
         for (const s of storages) {
+          if (s.enabled === 0) continue;
+
           const contentTokens =
             typeof s.content === 'string'
               ? s.content.split(',').map(x => x.trim()).filter(Boolean)
               : [];
           const hasBackupContent = contentTokens.includes('backup');
           const isPbs = s.type === 'pbs';
-
-          if (s.enabled === 0) {
-            scanDiag.push({
-              node: n.node,
-              storage: s.storage,
-              type: s.type ?? null,
-              reason: 'skipped-disabled',
-              status: 'skipped',
-            });
-            continue;
-          }
-
-          if (!hasBackupContent && !isPbs) {
-            // Not a backup target — don't probe and don't spam the diag list.
-            // We still emit a single row per such storage so the UI can
-            // explain *why* a pool was ignored if the user is wondering.
-            scanDiag.push({
-              node: n.node,
-              storage: s.storage,
-              type: s.type ?? null,
-              reason: 'skipped-no-backup-content',
-              status: 'skipped',
-            });
-            continue;
-          }
-
-          const reason: BackupScanDiagnostic['reason'] = hasBackupContent
-            ? 'content-backup'
-            : 'pbs-type';
+          if (!hasBackupContent && !isPbs) continue;
 
           try {
             const allEntries = await this.client.nodeStorageContent(
               n.node,
               s.storage,
             );
-            // Client-side filter — some NFS/dir backends return the server-side
-            // `content=backup` filter as empty even when backups exist. Also
-            // accept any entry whose volid matches a known backup pattern,
-            // since a few storage types don't populate `content` per entry.
+            // Client-side filter — some NFS/dir backends return an empty
+            // server-side `content=backup` filter even when backups exist.
+            // Also accept any entry whose volid matches a known backup
+            // pattern, since a few storage types don't populate `content`
+            // per entry.
             const backups = allEntries.filter(
               (e) =>
                 e.content === 'backup' ||
@@ -189,29 +135,10 @@ export class ProxmoxPoller {
               }
             }
 
-            // Build a hint when the numbers look suspicious, so the UI can
-            // nudge the user toward the right fix without digging through logs.
-            let hint: string | undefined;
-            if (allEntries.length === 0) {
-              hint =
-                'storage returned no content at all — check that the API token has Datastore.Audit on this storage (Datacenter → Permissions), or that the mount is actually populated';
-            } else if (backups.length === 0) {
-              hint = `storage has ${allEntries.length} entries but none of type=backup — the data on this share is probably iso/images/templates, not vzdump archives`;
-            } else if (vmidsSeen.size === 0) {
-              hint =
-                'backup entries found but no vmid could be extracted from any — please report a sample volid so we can extend the parser';
-            }
-
-            scanDiag.push({
-              node: n.node,
-              storage: s.storage,
-              type: s.type ?? null,
-              reason,
+            backupByStorage.set(s.storage, {
               status: 'ok',
-              rawEntryCount: allEntries.length,
               entryCount: backups.length,
-              vmidsSeen: Array.from(vmidsSeen).sort((a, b) => a - b),
-              hint,
+              vmCount: vmidsSeen.size,
             });
           } catch (bsErr) {
             const msg =
@@ -221,16 +148,40 @@ export class ProxmoxPoller {
               `[proxmox] backup scan failed for storage=${s.storage} node=${n.node}:`,
               msg,
             );
-            scanDiag.push({
-              node: n.node,
-              storage: s.storage,
-              type: s.type ?? null,
-              reason,
+            backupByStorage.set(s.storage, {
               status: 'error',
+              entryCount: 0,
+              vmCount: 0,
               error: msg,
             });
           }
         }
+
+        // --- Storage pools for the host card ---
+        // Include any enabled storage, even if inactive or with zero reported
+        // total (e.g. NFS backup shares). The UI renders "—" for missing sizes.
+        const pools: StoragePool[] = storages
+          .filter(s => s.enabled !== 0)
+          .map(s => {
+            const used = s.used ?? null;
+            const total = s.total && s.total > 0 ? s.total : null;
+            const usedPct =
+              used != null && total != null ? (used / total) * 100 : null;
+            return {
+              name: s.storage,
+              type: s.type ?? null,
+              used,
+              total,
+              usedPct,
+              backup: backupByStorage.get(s.storage) ?? null,
+            };
+          })
+          .sort((a, b) => {
+            // Biggest-used first, but keep pools with null% at the bottom.
+            const av = a.usedPct ?? -1;
+            const bv = b.usedPct ?? -1;
+            return bv - av;
+          });
 
         // --- Host metrics ---
         const cpuPct = status.cpu * 100;
@@ -375,9 +326,6 @@ export class ProxmoxPoller {
 
     replaceByPrefix('qemu-', vmTargets.filter(t => t.id.startsWith('qemu-')));
     replaceByPrefix('lxc-', vmTargets.filter(t => t.id.startsWith('lxc-')));
-
-    // Publish backup-scan diagnostics so the dashboard can show what was scanned.
-    setBackupScan(scanDiag);
   }
 }
 

@@ -12,6 +12,11 @@ import type {
 /**
  * Thin wrapper around the Proxmox REST API using a read-only API token.
  * Only GETs — this dashboard is strictly observational.
+ *
+ * NOTE: PVE 9.1.7 has a bug where non-root tokens return empty data for
+ * NFS content listings even with Datastore.Audit + VM.Audit at every path.
+ * The token used here must be owned by root (root@pam!<tokenid>) for the
+ * content endpoint to return real data. See docker-compose.yml for context.
  */
 export class ProxmoxClient {
   private readonly cfg: ProxmoxConfig;
@@ -74,11 +79,9 @@ export class ProxmoxClient {
 
   /**
    * All content on a specific storage for a specific node.
-   * Intentionally unfiltered — some storage backends (notably NFS with
-   * vzdump files) have been observed to return an empty list when
-   * `?content=backup` is passed, even though the directory contains
-   * vzdump archives. Client-side filtering by `content === 'backup'`
-   * is more reliable.
+   * Intentionally unfiltered server-side (no `?content=backup`) — that filter
+   * has been observed to return empty on NFS even when backups exist. Client
+   * code filters by `content === 'backup'` or by volid heuristics.
    */
   nodeStorageContent(
     node: string,

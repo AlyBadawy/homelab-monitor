@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.4.2
+    image: homelab-monitor-backend:0.4.3
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -22,6 +22,11 @@ services:
 
       PROXMOX_TOKEN_ID: "${PROXMOX_TOKEN_ID}"
       # Secret is injected via Portainer stack env vars — never commit it.
+      # NOTE: PVE 9.1.7 has a bug where non-root API tokens return empty
+      # data for NFS content listings even with full Datastore.Audit +
+      # VM.Audit permissions. Use a token created under the root user for
+      # this dashboard. The token is read-only (GETs only), so the blast
+      # radius of using a root-owned token here is still bounded.
       PROXMOX_TOKEN_SECRET: "${PROXMOX_TOKEN_SECRET}"
 
       # Set to "true" when using the direct IP (self-signed cert).
@@ -39,7 +44,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.4.2
+    image: homelab-monitor-frontend:0.4.3
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

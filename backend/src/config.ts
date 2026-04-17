@@ -6,7 +6,7 @@
 export interface ProxmoxConfig {
   enabled: boolean;
   baseUrl: string;          // e.g. https://proxmox.in.alybadawy.com
-  tokenId: string;          // e.g. monitor@pve!dashboard
+  tokenId: string;          // e.g. root@pam!dashboard
   tokenSecret: string;      // the UUID
   insecureTls: boolean;     // skip TLS verification (for self-signed upstream)
 }

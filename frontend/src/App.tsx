@@ -4,10 +4,8 @@ import { Header } from "./components/Header";
 import { Section } from "./components/Section";
 import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
-import { BackupScanPanel } from "./components/BackupScanPanel";
 import {
   fetchSummary,
-  type BackupScanDiagnostic,
   type SummaryErrors,
   type TargetSummary,
 } from "./lib/api";
@@ -27,7 +25,6 @@ export default function App() {
   const [apiErrors, setApiErrors] = useState<SummaryErrors>({
     proxmox: null,
   });
-  const [backupScan, setBackupScan] = useState<BackupScanDiagnostic[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Keep the drawer's target reference fresh on each poll tick (so the header
@@ -44,7 +41,6 @@ export default function App() {
       setTargets(data.targets);
       setLastUpdated(data.generatedAt);
       setApiErrors(data.errors);
-      setBackupScan(data.backupScan ?? []);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
       setFetchError((e as Error).message);
@@ -83,8 +79,6 @@ export default function App() {
             </p>
           </div>
         )}
-
-        {backupScan.length > 0 && <BackupScanPanel diagnostics={backupScan} />}
 
         {apiErrors.proxmox && (
           <div className="card border-accent-amber/40 bg-accent-amber/5">

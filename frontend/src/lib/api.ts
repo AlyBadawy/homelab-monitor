@@ -12,12 +12,21 @@ export type TargetKind =
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
+export interface StoragePoolBackup {
+  status: 'ok' | 'error';
+  entryCount: number;
+  vmCount: number;
+  error?: string;
+}
+
 export interface StoragePool {
   name: string;
   type: string | null;
   used: number | null;
   total: number | null;
   usedPct: number | null;
+  /** Backup metadata for this pool, or null if it isn't a backup target. */
+  backup: StoragePoolBackup | null;
 }
 
 export interface TargetSummary {
@@ -42,28 +51,10 @@ export interface SummaryErrors {
   proxmox: string | null;
 }
 
-export interface BackupScanDiagnostic {
-  node: string;
-  storage: string;
-  type: string | null;
-  reason:
-    | 'content-backup'
-    | 'pbs-type'
-    | 'skipped-disabled'
-    | 'skipped-no-backup-content';
-  status: 'ok' | 'error' | 'skipped';
-  rawEntryCount?: number;
-  entryCount?: number;
-  vmidsSeen?: number[];
-  error?: string;
-  hint?: string;
-}
-
 export interface SummaryResponse {
   targets: TargetSummary[];
   generatedAt: number;
   errors: SummaryErrors;
-  backupScan?: BackupScanDiagnostic[];
 }
 
 export async function fetchSummary(
