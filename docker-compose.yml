@@ -1,0 +1,62 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: homelab-monitor-backend:0.2.0
+    container_name: homelab-monitor-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATA_DIR: /data
+      POLL_INTERVAL_MS: 10000
+
+      # ----- Proxmox -----
+      # Try the NPM-proxied URL first (has a valid cert, so TLS can be verified).
+      # If /api2/json calls fail, switch to the direct IP below and flip
+      # PROXMOX_INSECURE_TLS to "true" since PVE ships with a self-signed cert.
+      PROXMOX_BASE_URL: "${PROXMOX_BASE_URL:-https://proxmox.in.alybadawy.com}"
+      # Fallback if NPM path breaks: set PROXMOX_BASE_URL=https://172.20.20.10:8006
+      # and PROXMOX_INSECURE_TLS=true in the stack env vars.
+
+      PROXMOX_TOKEN_ID: "${PROXMOX_TOKEN_ID}"
+      # Secret is injected via Portainer stack env vars — never commit it.
+      PROXMOX_TOKEN_SECRET: "${PROXMOX_TOKEN_SECRET}"
+
+      # Set to "true" when using the direct IP (self-signed cert).
+      PROXMOX_INSECURE_TLS: "${PROXMOX_INSECURE_TLS:-false}"
+    volumes:
+      - backend_data:/data
+    networks:
+      - homelab-monitor
+    # No exposed ports by default — frontend proxies to it internally.
+    # Uncomment for direct backend access during development:
+    # ports:
+    #   - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: homelab-monitor-frontend:0.2.0
+    container_name: homelab-monitor-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Override via FRONTEND_PORT in Portainer stack env vars.
+      - "${FRONTEND_PORT:-8085}:80"
+    networks:
+      - homelab-monitor
+
+volumes:
+  backend_data:
+
+networks:
+  homelab-monitor:
+    # Created manually in Portainer (Networks → Add network, name: homelab-monitor).
+    # Using an external network means other containers can attach to it later
+    # without this stack owning its lifecycle.
+    external: true
+    name: homelab-monitor

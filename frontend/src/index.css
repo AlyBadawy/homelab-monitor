@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: theme('fontFamily.sans');
+    background-color: theme('colors.bg.900');
+    color: theme('colors.text.DEFAULT');
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle page-wide grid backdrop for the techy feel. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: theme('backgroundImage.grid');
+    background-size: 40px 40px;
+    pointer-events: none;
+    opacity: 0.35;
+    mask-image: radial-gradient(ellipse at center, black 40%, transparent 85%);
+    z-index: 0;
+  }
+}
+
+@layer components {
+  .card {
+    @apply relative rounded-xl border border-border bg-bg-800/70 backdrop-blur-sm
+           p-4 transition-colors hover:border-border-strong;
+  }
+  .card-title {
+    @apply font-mono text-xs uppercase tracking-[0.18em] text-text-muted;
+  }
+  .metric-value {
+    @apply font-mono text-2xl font-semibold text-text;
+  }
+  .metric-unit {
+    @apply font-mono text-sm text-text-muted ml-1;
+  }
+  .section-title {
+    @apply font-mono text-[0.7rem] uppercase tracking-[0.22em] text-text-muted;
+  }
+  .divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-border-strong to-transparent;
+  }
+}
