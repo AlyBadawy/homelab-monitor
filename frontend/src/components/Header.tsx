@@ -1,5 +1,5 @@
-import { Activity, RefreshCcw } from 'lucide-react';
-import { fmtRelative } from '../lib/format';
+import { Activity, RefreshCcw } from "lucide-react";
+import { fmtRelative } from "../lib/format";
 
 interface HeaderProps {
   lastUpdated: number | null;
@@ -21,7 +21,7 @@ export function Header({ lastUpdated, onRefresh, loading }: HeaderProps) {
               Homelab <span className="text-accent-cyan">Monitor</span>
             </h1>
             <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
-              read-only · local network
+              SA Cloud - Monitor Dashboard
             </p>
           </div>
         </div>
@@ -30,7 +30,7 @@ export function Header({ lastUpdated, onRefresh, loading }: HeaderProps) {
           <div className="text-right font-mono text-[0.7rem] uppercase tracking-[0.2em] text-text-muted">
             <div>last sync</div>
             <div className="text-text">
-              {lastUpdated === null ? '—' : fmtRelative(lastUpdated)}
+              {lastUpdated === null ? "—" : fmtRelative(lastUpdated)}
             </div>
           </div>
           <button
@@ -38,7 +38,9 @@ export function Header({ lastUpdated, onRefresh, loading }: HeaderProps) {
             disabled={loading}
             className="flex items-center gap-2 rounded-lg border border-border bg-bg-800 px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-text-muted transition hover:border-accent-cyan hover:text-accent-cyan disabled:opacity-50"
           >
-            <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCcw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
             Refresh
           </button>
         </div>
