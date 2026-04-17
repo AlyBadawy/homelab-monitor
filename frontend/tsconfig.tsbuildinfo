@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/Header.tsx","./src/components/MetricBar.tsx","./src/components/Section.tsx","./src/components/StatusPill.tsx","./src/components/StoragePoolList.tsx","./src/components/TargetCard.tsx","./src/lib/api.ts","./src/lib/format.ts"],"version":"5.9.3"}
