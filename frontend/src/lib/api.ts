@@ -52,9 +52,11 @@ export interface BackupScanDiagnostic {
     | 'skipped-disabled'
     | 'skipped-no-backup-content';
   status: 'ok' | 'error' | 'skipped';
+  rawEntryCount?: number;
   entryCount?: number;
   vmidsSeen?: number[];
   error?: string;
+  hint?: string;
 }
 
 export interface SummaryResponse {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Archive } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { ChevronDown, ChevronRight, Archive, Info } from 'lucide-react';
 import type { BackupScanDiagnostic } from '../lib/api';
 
 interface BackupScanPanelProps {
@@ -23,11 +23,11 @@ export function BackupScanPanel({ diagnostics }: BackupScanPanelProps) {
     (a, d) => a + (d.entryCount ?? 0),
     0,
   );
-  const hint = errored.length
+  const headerHint = errored.length
     ? `${errored.length} scan${errored.length > 1 ? 's' : ''} failed`
     : scanned.length === 0
       ? 'no backup storages detected'
-      : `${scanned.length} scanned · ${totalEntries} total entries`;
+      : `${scanned.length} scanned · ${totalEntries} backup entries`;
 
   return (
     <div className="card">
@@ -49,7 +49,7 @@ export function BackupScanPanel({ diagnostics }: BackupScanPanelProps) {
             errored.length ? 'text-accent-rose' : 'text-text-muted'
           }`}
         >
-          {hint}
+          {headerHint}
         </span>
       </button>
 
@@ -62,37 +62,50 @@ export function BackupScanPanel({ diagnostics }: BackupScanPanelProps) {
                 <Th>Storage</Th>
                 <Th>Type</Th>
                 <Th>Status</Th>
-                <Th className="text-right">Entries</Th>
+                <Th className="text-right">Raw</Th>
+                <Th className="text-right">Backups</Th>
                 <Th>VMs seen</Th>
                 <Th>Reason / error</Th>
               </tr>
             </thead>
             <tbody>
               {diagnostics.map((d, idx) => (
-                <tr
-                  key={`${d.node}/${d.storage}/${idx}`}
-                  className="border-b border-border/50"
-                >
-                  <Td>{d.node}</Td>
-                  <Td>{d.storage}</Td>
-                  <Td className="text-text-dim">{d.type ?? '—'}</Td>
-                  <Td>
-                    <StatusTag status={d.status} />
-                  </Td>
-                  <Td className="text-right">
-                    {d.entryCount ?? (d.status === 'skipped' ? '—' : 0)}
-                  </Td>
-                  <Td className="text-text-dim">
-                    {d.vmidsSeen && d.vmidsSeen.length > 0
-                      ? d.vmidsSeen.join(', ')
-                      : '—'}
-                  </Td>
-                  <Td className="max-w-[480px] truncate text-text-dim">
-                    {d.status === 'error'
-                      ? d.error
-                      : reasonLabel(d.reason)}
-                  </Td>
-                </tr>
+                <Fragment key={`${d.node}/${d.storage}/${idx}`}>
+                  <tr className="border-b border-border/50">
+                    <Td>{d.node}</Td>
+                    <Td>{d.storage}</Td>
+                    <Td className="text-text-dim">{d.type ?? '—'}</Td>
+                    <Td>
+                      <StatusTag status={d.status} />
+                    </Td>
+                    <Td className="text-right text-text-dim">
+                      {d.rawEntryCount ?? (d.status === 'skipped' ? '—' : 0)}
+                    </Td>
+                    <Td className="text-right">
+                      {d.entryCount ?? (d.status === 'skipped' ? '—' : 0)}
+                    </Td>
+                    <Td className="text-text-dim">
+                      {d.vmidsSeen && d.vmidsSeen.length > 0
+                        ? d.vmidsSeen.join(', ')
+                        : '—'}
+                    </Td>
+                    <Td className="max-w-[480px] truncate text-text-dim">
+                      {d.status === 'error'
+                        ? d.error
+                        : reasonLabel(d.reason)}
+                    </Td>
+                  </tr>
+                  {d.hint && (
+                    <tr className="border-b border-border/50 bg-accent-amber/5">
+                      <Td colSpan={8} className="text-accent-amber">
+                        <div className="flex items-start gap-2">
+                          <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span>{d.hint}</span>
+                        </div>
+                      </Td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -104,6 +117,7 @@ export function BackupScanPanel({ diagnostics }: BackupScanPanelProps) {
 
 function shouldDefaultOpen(d: BackupScanDiagnostic[]): boolean {
   if (d.some((x) => x.status === 'error')) return true;
+  if (d.some((x) => x.hint)) return true;
   const anyOk = d.some((x) => x.status === 'ok' && (x.entryCount ?? 0) > 0);
   return !anyOk; // open if we found nothing, so the user sees *why*
 }
@@ -156,9 +170,15 @@ function Th({
 function Td({
   children,
   className = '',
+  colSpan,
 }: {
   children: React.ReactNode;
   className?: string;
+  colSpan?: number;
 }) {
-  return <td className={`px-2 py-1.5 align-top ${className}`}>{children}</td>;
+  return (
+    <td colSpan={colSpan} className={`px-2 py-1.5 align-top ${className}`}>
+      {children}
+    </td>
+  );
 }

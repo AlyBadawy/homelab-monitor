@@ -73,16 +73,19 @@ export class ProxmoxClient {
   }
 
   /**
-   * Backup entries on a specific storage for a specific node.
-   * Works for both PBS-type storages and file-based (dir/nfs) storages
-   * that hold vzdump files.
+   * All content on a specific storage for a specific node.
+   * Intentionally unfiltered — some storage backends (notably NFS with
+   * vzdump files) have been observed to return an empty list when
+   * `?content=backup` is passed, even though the directory contains
+   * vzdump archives. Client-side filtering by `content === 'backup'`
+   * is more reliable.
    */
-  nodeStorageBackups(
+  nodeStorageContent(
     node: string,
     storage: string,
   ): Promise<PveBackupEntry[]> {
     return this.get<PveBackupEntry[]>(
-      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content?content=backup`,
+      `/nodes/${encodeURIComponent(node)}/storage/${encodeURIComponent(storage)}/content`,
     );
   }
 }

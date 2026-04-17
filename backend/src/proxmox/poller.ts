@@ -163,12 +163,22 @@ export class ProxmoxPoller {
             : 'pbs-type';
 
           try {
-            const entries = await this.client.nodeStorageBackups(
+            const allEntries = await this.client.nodeStorageContent(
               n.node,
               s.storage,
             );
+            // Client-side filter — some NFS/dir backends return the server-side
+            // `content=backup` filter as empty even when backups exist. Also
+            // accept any entry whose volid matches a known backup pattern,
+            // since a few storage types don't populate `content` per entry.
+            const backups = allEntries.filter(
+              (e) =>
+                e.content === 'backup' ||
+                /vzdump-(?:qemu|lxc)-\d+-/.test(e.volid) ||
+                /:backup\/(?:vm|ct)\/\d+\//.test(e.volid),
+            );
             const vmidsSeen = new Set<number>();
-            for (const e of entries) {
+            for (const e of backups) {
               const vmid = extractVmid(e);
               if (vmid != null) {
                 vmidsSeen.add(vmid);
@@ -178,14 +188,30 @@ export class ProxmoxPoller {
                 );
               }
             }
+
+            // Build a hint when the numbers look suspicious, so the UI can
+            // nudge the user toward the right fix without digging through logs.
+            let hint: string | undefined;
+            if (allEntries.length === 0) {
+              hint =
+                'storage returned no content at all — check that the API token has Datastore.Audit on this storage (Datacenter → Permissions), or that the mount is actually populated';
+            } else if (backups.length === 0) {
+              hint = `storage has ${allEntries.length} entries but none of type=backup — the data on this share is probably iso/images/templates, not vzdump archives`;
+            } else if (vmidsSeen.size === 0) {
+              hint =
+                'backup entries found but no vmid could be extracted from any — please report a sample volid so we can extend the parser';
+            }
+
             scanDiag.push({
               node: n.node,
               storage: s.storage,
               type: s.type ?? null,
               reason,
               status: 'ok',
-              entryCount: entries.length,
+              rawEntryCount: allEntries.length,
+              entryCount: backups.length,
               vmidsSeen: Array.from(vmidsSeen).sort((a, b) => a - b),
+              hint,
             });
           } catch (bsErr) {
             const msg =

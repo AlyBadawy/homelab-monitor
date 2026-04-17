@@ -54,9 +54,14 @@ export interface BackupScanDiagnostic {
     | 'skipped-no-backup-content';
   /** HTTP request outcome. Undefined if we didn't probe it. */
   status: 'ok' | 'error' | 'skipped';
+  /** How many entries of ANY content type the storage returned. */
+  rawEntryCount?: number;
+  /** How many of those were of `content === 'backup'` (what we count). */
   entryCount?: number;
   vmidsSeen?: number[];
   error?: string;
+  /** User-facing hint when the scan reveals something suspicious. */
+  hint?: string;
 }
 
 interface Snapshot {
