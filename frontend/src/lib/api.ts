@@ -69,3 +69,43 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
     proxmox: 'enabled' | 'disabled';
   };
 }
+
+export interface HistoryPoint {
+  ts: number;
+  value: number;
+}
+
+export interface HistoryResponse {
+  targetId: string;
+  series: Record<string, HistoryPoint[]>;
+  generatedAt: number;
+}
+
+export interface HistoryOptions {
+  /** Max points per series. 0 = no downsampling. Default 200 (good for sparklines). */
+  points?: number;
+  /** How far back to query in ms. Default = full server retention (24h). */
+  windowMs?: number;
+  signal?: AbortSignal;
+}
+
+/**
+ * Fetch 24h history for multiple metrics on one target in a single request.
+ * Returns a {metric: points[]} map — each series is already downsampled
+ * server-side to `points` (default 200) for cheap rendering.
+ */
+export async function fetchHistory(
+  targetId: string,
+  metrics: string[],
+  opts: HistoryOptions = {},
+): Promise<HistoryResponse> {
+  const params = new URLSearchParams();
+  params.set('metrics', metrics.join(','));
+  if (typeof opts.points === 'number') params.set('points', String(opts.points));
+  if (typeof opts.windowMs === 'number')
+    params.set('windowMs', String(opts.windowMs));
+  const url = `/api/stats/history/${encodeURIComponent(targetId)}?${params.toString()}`;
+  const r = await fetch(url, { signal: opts.signal });
+  if (!r.ok) throw new Error(`history failed: ${r.status}`);
+  return (await r.json()) as HistoryResponse;
+}

@@ -107,3 +107,38 @@ export function history(
   const since = Date.now() - windowMs;
   return stmtHistory.all(targetId, metric, since) as HistoryPoint[];
 }
+
+/**
+ * Downsample a monotonically-timestamped series to at most `maxPoints` points
+ * using equal-width time buckets and averaging the value inside each bucket.
+ * Cheap, deterministic, and good enough for sparkline rendering. For series
+ * shorter than maxPoints we just return the raw points.
+ */
+export function downsample(
+  points: HistoryPoint[],
+  maxPoints: number,
+): HistoryPoint[] {
+  if (!Number.isFinite(maxPoints) || maxPoints <= 0) return points;
+  if (points.length <= maxPoints) return points;
+  const first = points[0].ts;
+  const last = points[points.length - 1].ts;
+  const span = last - first;
+  if (span <= 0) return points.slice(-maxPoints);
+  const bucketSize = span / maxPoints;
+  const buckets: Array<{ sum: number; count: number; tsSum: number }> =
+    Array.from({ length: maxPoints }, () => ({ sum: 0, count: 0, tsSum: 0 }));
+  for (const p of points) {
+    let idx = Math.floor((p.ts - first) / bucketSize);
+    if (idx >= maxPoints) idx = maxPoints - 1;
+    if (idx < 0) idx = 0;
+    buckets[idx].sum += p.value;
+    buckets[idx].count += 1;
+    buckets[idx].tsSum += p.ts;
+  }
+  const out: HistoryPoint[] = [];
+  for (const b of buckets) {
+    if (b.count === 0) continue;
+    out.push({ ts: Math.round(b.tsSum / b.count), value: b.sum / b.count });
+  }
+  return out;
+}

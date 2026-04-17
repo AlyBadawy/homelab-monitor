@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { Header } from "./components/Header";
 import { Section } from "./components/Section";
 import { TargetCard } from "./components/TargetCard";
+import { DetailDrawer } from "./components/DetailDrawer";
 import {
   fetchSummary,
   type SummaryErrors,
@@ -24,6 +25,13 @@ export default function App() {
   const [apiErrors, setApiErrors] = useState<SummaryErrors>({
     proxmox: null,
   });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Keep the drawer's target reference fresh on each poll tick (so the header
+  // shows live status/uptime while the drawer is open).
+  const selectedTarget = selectedId
+    ? targets.find((t) => t.id === selectedId) ?? null
+    : null;
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -91,7 +99,12 @@ export default function App() {
           return (
             <Section key={section.title} title={section.title}>
               {items.map((t) => (
-                <TargetCard key={t.id} target={t} wide={isHypervisor} />
+                <TargetCard
+                  key={t.id}
+                  target={t}
+                  wide={isHypervisor}
+                  onSelect={(target) => setSelectedId(target.id)}
+                />
               ))}
             </Section>
           );
@@ -125,13 +138,18 @@ export default function App() {
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           chunk 2 · proxmox integration live · more services coming
         </p>
-        <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
+        <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}
           <a href="https://alybadawy.com" className="underline">
             alybadawy
           </a>
         </p>
       </footer>
+
+      <DetailDrawer
+        target={selectedTarget}
+        onClose={() => setSelectedId(null)}
+      />
     </div>
   );
 }
