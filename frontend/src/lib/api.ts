@@ -27,6 +27,14 @@ export interface StoragePool {
   used: number | null;
   total: number | null;
   usedPct: number | null;
+  /** RAID level ('raid1', 'raid5', ...) — UNAS pools only. */
+  raidLevel?: string | null;
+  /** Total devices expected in the array (N in "[N/M]"). */
+  raidDevices?: number | null;
+  /** Devices currently in sync (M in "[N/M]"). M < N ⇒ degraded. */
+  raidInSync?: number | null;
+  /** User share names inside this pool (UNAS only). */
+  shares?: string[] | null;
   /** Backup metadata for this pool, or null if it isn't a backup target. */
   backup: StoragePoolBackup | null;
 }

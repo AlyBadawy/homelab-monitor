@@ -32,6 +32,18 @@ export interface StoragePool {
   total: number | null;
   usedPct: number | null;
   /**
+   * RAID level (e.g. 'raid1', 'raid5'). Only populated on UNAS pools that
+   * map to a /proc/mdstat array. Null on Proxmox storages and on UNAS
+   * pools that aren't mdraid-backed (e.g. a single-disk install).
+   */
+  raidLevel?: string | null;
+  /** Expected device count in the RAID array (N in "[N/M]"). */
+  raidDevices?: number | null;
+  /** Devices currently in sync (M in "[N/M]"). M < N ⇒ degraded. */
+  raidInSync?: number | null;
+  /** User share names discovered inside this pool (UNAS only). */
+  shares?: string[] | null;
+  /**
    * Backup metadata — populated when the pool advertises `content=backup`
    * or is a PBS datastore. Null when the pool isn't a backup target.
    */

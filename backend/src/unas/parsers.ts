@@ -120,7 +120,17 @@ export function parseDf(stdout: string): DfRow[] {
 
 /* ------------------------- `lsblk -dn -o NAME,TYPE,SIZE` ---------------- */
 
-/** Whole-disk block devices (excludes partitions and loop devices). */
+/**
+ * Whole-disk block devices, filtered to "real" storage drives.
+ *
+ * UNAS Pro's kernel presents a pile of block devices — loop*, mtdblock*,
+ * mmcblk0boot0/boot1, mmcblk0 (eMMC boot device), plus the actual user-
+ * storage SSDs/HDDs. We only want the last category. Whitelist by name
+ * pattern: sd[a-z]+, nvme\d+n\d+, hd[a-z]+. That covers SATA/SAS + NVMe +
+ * old IDE without sweeping in flash devices.
+ */
+const REAL_DRIVE_RE = /^(sd[a-z]+|nvme\d+n\d+|hd[a-z]+)$/;
+
 export function parseLsblkDisks(stdout: string): string[] {
   const names: string[] = [];
   for (const line of stdout.split('\n')) {
@@ -128,7 +138,8 @@ export function parseLsblkDisks(stdout: string): string[] {
     if (parts.length < 2) continue;
     const [name, type] = parts;
     if (type !== 'disk') continue;
-    if (!name || name.startsWith('loop')) continue;
+    if (!name) continue;
+    if (!REAL_DRIVE_RE.test(name)) continue;
     names.push(`/dev/${name}`);
   }
   return names;
@@ -224,6 +235,98 @@ export function parseSmartctl(device: string, stdout: string, rc: number | null)
   }
 
   return info;
+}
+
+/* ------------------------------ /proc/mdstat ----------------------------- */
+
+export interface MdArray {
+  /** Kernel device name, e.g. 'md0'. */
+  name: string;
+  /** 'raid1', 'raid5', 'raid10', 'linear', etc. Null if we couldn't read it. */
+  level: string | null;
+  /** True when the first status word on the header line is 'active'. */
+  active: boolean;
+  /** "[N/M]" → total devices (N) the array expects. */
+  deviceCount: number | null;
+  /** "[N/M]" → devices currently in sync (M). M < N ⇒ degraded. */
+  devicesInSync: number | null;
+  /** Underlying physical devices, e.g. ['sda1', 'sdb1']. */
+  members: string[];
+}
+
+/**
+ * Parse `cat /proc/mdstat`. Example:
+ *
+ *   Personalities : [raid1]
+ *   md0 : active raid1 sdb1[1] sda1[0]
+ *         1953379864 blocks super 1.2 [2/2] [UU]
+ *         bitmap: 0/15 pages [0KB], 65536KB chunk
+ *
+ *   unused devices: <none>
+ *
+ * The header line gives name + state + level + members; the next indented line
+ * carries the health bracket `[N/M]`. We walk the file header-first and look
+ * ahead up to 4 lines for the bracket.
+ */
+export function parseMdstat(stdout: string): MdArray[] {
+  const arrays: MdArray[] = [];
+  const lines = stdout.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const header = lines[i];
+    // "md0 : active raid1 sdb1[1] sda1[0]"
+    const m = header.match(
+      /^(md\d+)\s*:\s*(\S+)\s+(\S+)\s*(.*)$/,
+    );
+    if (!m) continue;
+    const [, name, status, levelToken, rest] = m;
+    const active = status === 'active';
+    const level = levelToken.startsWith('raid') || levelToken === 'linear'
+      ? levelToken
+      : null;
+
+    const members = (rest ?? '')
+      .split(/\s+/)
+      .map((tok) => tok.replace(/\[\d+\](\([^)]*\))?$/, ''))
+      .filter((tok) => /^[a-z0-9]+$/i.test(tok));
+
+    let deviceCount: number | null = null;
+    let devicesInSync: number | null = null;
+    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+      // Stop scanning if we hit another array header or a blank line.
+      if (/^md\d+\s*:/.test(lines[j])) break;
+      const bracket = lines[j].match(/\[(\d+)\/(\d+)\]/);
+      if (bracket) {
+        deviceCount = Number(bracket[1]);
+        devicesInSync = Number(bracket[2]);
+        break;
+      }
+    }
+
+    arrays.push({ name, level, active, deviceCount, devicesInSync, members });
+  }
+  return arrays;
+}
+
+/* -------------------- volume directory listing (shares) ------------------ */
+
+/**
+ * Parse output of `ls -1Ap /volume/<UUID>/` — each directory gets a trailing
+ * slash (thanks to -p), and -A omits '.' and '..' but still shows dotfiles.
+ * Shares are the directories that don't start with a dot (those are UniFi
+ * internal: .srv, .unifi-drive, .archives, .snapshots, ...).
+ */
+export function parseVolumeShares(stdout: string): string[] {
+  const shares: string[] = [];
+  for (const raw of stdout.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    // -p adds '/' to directories; non-dirs don't apply to shares.
+    if (!line.endsWith('/')) continue;
+    const name = line.slice(0, -1);
+    if (!name || name.startsWith('.')) continue;
+    shares.push(name);
+  }
+  return shares;
 }
 
 /* ----------------- /sys/class/thermal/thermal_zone<N>/temp ---------------- */

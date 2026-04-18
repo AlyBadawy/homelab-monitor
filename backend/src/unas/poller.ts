@@ -12,12 +12,16 @@ import {
   cpuPctFromSnapshots,
   parseDf,
   parseLsblkDisks,
+  parseMdstat,
   parseMeminfo,
   parseProcStat,
   parseSmartctl,
   parseThermalZones,
   parseUptime,
+  parseVolumeShares,
   type CpuSnapshot,
+  type DfRow,
+  type MdArray,
 } from './parsers';
 
 /**
@@ -96,6 +100,12 @@ export class UnasPoller {
     // --- Quick batch ---
     // /proc/stat is read twice (sampled ~500ms apart) to derive CPU%.
     // The `sleep` keeps both reads in the same SSH session.
+    //
+    // Also pull /proc/mdstat (RAID level + health) and a directory listing
+    // of /volume/*/ so we can discover user-created shares (homelab,
+    // proxmox_backups, ...). The share listing is best-effort: if the UNAS
+    // doesn't mount volumes at /volume/* (different firmware layouts), the
+    // command returns empty and we just skip shares rather than erroring.
     const quickCmds = [
       'cat /proc/uptime',
       'cat /proc/meminfo',
@@ -107,9 +117,15 @@ export class UnasPoller {
       "df -PB1 -x tmpfs -x devtmpfs -x overlay -x squashfs -x proc -x sysfs -x efivarfs 2>/dev/null",
       // List whole-disk block devices.
       'lsblk -dn -o NAME,TYPE,SIZE 2>/dev/null',
+      // RAID level + state per md array.
+      'cat /proc/mdstat 2>/dev/null',
+      // Share discovery — -A hides '.' and '..' but keeps dotfiles; -p adds
+      // trailing '/' to dirs so we can filter. Iterate every /volume/*/ and
+      // print entries tagged with which volume UUID they live under.
+      'for v in /volume/*/; do [ -d "$v" ] && echo "VOLUME:$v" && ls -1Ap "$v" 2>/dev/null; done',
     ];
     const quick = await this.client.runBatch(quickCmds);
-    const [uptimeR, memR, stat1R, stat2R, thermalR, dfR, lsblkR] = quick;
+    const [uptimeR, memR, stat1R, stat2R, thermalR, dfR, lsblkR, mdstatR, volLsR] = quick;
 
     // --- Parse ---
     const uptimeSec = parseUptime(uptimeR.stdout);
@@ -121,37 +137,23 @@ export class UnasPoller {
     const cpuTempC = parseThermalZones(thermalR.stdout);
     const dfRows = parseDf(dfR.stdout);
     const disks = parseLsblkDisks(lsblkR.stdout);
+    const mdArrays = parseMdstat(mdstatR?.stdout ?? '');
+    const volumeShares = parseVolumeLsOutput(volLsR?.stdout ?? '');
 
     // --- df → StoragePool[] ---
-    // Map every mount to a pool, except things that are clearly uninteresting
-    // on UNAS (kernel/boot filesystems). We keep user-facing mounts.
-    const pools: StoragePool[] = dfRows
-      .filter(
-        (r) =>
-          !r.mount.startsWith('/sys') &&
-          !r.mount.startsWith('/proc') &&
-          !r.mount.startsWith('/dev') &&
-          !r.mount.startsWith('/run') &&
-          !r.mount.startsWith('/boot') &&
-          r.totalBytes > 0,
-      )
-      .map((r) => ({
-        name: r.mount === '/' ? 'root' : r.mount.replace(/^\//, ''),
-        type: 'fs',
-        used: r.usedBytes,
-        total: r.totalBytes,
-        usedPct:
-          r.usedPct ??
-          (r.totalBytes > 0 ? (r.usedBytes / r.totalBytes) * 100 : null),
-        backup: null,
-      }))
-      .sort((a, b) => (b.usedPct ?? -1) - (a.usedPct ?? -1));
+    // The raw df output on UNAS Pro is noisy in two ways:
+    //   1. UniFi bind-mounts internal areas (e.g. .srv/.unifi-drive/.archives)
+    //      back to the same underlying volume, so the same physical storage
+    //      appears multiple times with identical used/total numbers.
+    //   2. System filesystems (var/log, mnt/.rwfs, persistent) clutter the
+    //      list but aren't what the user cares about when looking at "storage".
+    // We strip both before mapping to StoragePool.
+    const pools: StoragePool[] = buildUnasPools(dfRows, mdArrays, volumeShares);
 
-    // Pick the "rootfs %" for the card's disk pill — use / if present, else
-    // the first pool. This keeps the header consistent with Proxmox hosts.
-    const rootPool =
-      pools.find((p) => p.name === 'root') ?? pools[0] ?? null;
-    const diskPct = rootPool?.usedPct ?? null;
+    // Pick the headline "disk %" for the card's pill. We sorted volume pools
+    // first in buildUnasPools, so pools[0] is the main storage volume — which
+    // is what the user wants to see summarized at the top of the card.
+    const diskPct = pools[0]?.usedPct ?? null;
 
     // --- Slow batch: smartctl per drive ---
     let drives: UnasDrive[] = [];
@@ -234,6 +236,145 @@ function toUnasDrive(device: string, r: ExecResult): UnasDrive {
 
 function slugifyDevice(device: string): string {
   return device.replace(/^\/dev\//, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+/* ---------- UNAS pool reshaping: dedupe, filter, RAID, shares ---------- */
+
+/**
+ * Mounts that should never show as "storage pools" on the dashboard — they're
+ * UniFi OS internals or kernel state that users don't care about.
+ */
+const SYSTEM_MOUNT_RE =
+  /^\/(sys|proc|dev|run|boot|var\/log|mnt|persistent|tmp|etc)\b/;
+
+/** Paths that are bind-mounts into a volume's hidden UniFi areas. */
+const HIDDEN_BIND_RE = /\/\.(srv|unifi-drive|archives|snapshots)\b/;
+
+/** Detect "/volume/<uuid-or-name>/" — the real user-visible pool mount. */
+const VOLUME_MOUNT_RE = /^\/volume\/([^/]+)\/?$/;
+
+interface VolumeShareIndex {
+  /** Map of "/volume/<uuid>/" → share names discovered inside. */
+  byMount: Map<string, string[]>;
+}
+
+/**
+ * Parse the batched output of
+ *   `for v in /volume/*\/; do [ -d "$v" ] && echo "VOLUME:$v" && ls -1Ap "$v"; done`
+ * into a map keyed by the volume mount path. Used to attach per-pool share
+ * names below.
+ */
+function parseVolumeLsOutput(stdout: string): VolumeShareIndex {
+  const byMount = new Map<string, string[]>();
+  let currentMount: string | null = null;
+  const buffer: string[] = [];
+  const flush = (): void => {
+    if (currentMount !== null) {
+      byMount.set(currentMount, parseVolumeShares(buffer.join('\n')));
+    }
+    buffer.length = 0;
+  };
+  for (const raw of stdout.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const header = line.match(/^VOLUME:(.+)$/);
+    if (header) {
+      flush();
+      // Strip trailing slash so keys match what we derive from df below.
+      currentMount = header[1].replace(/\/+$/, '');
+      continue;
+    }
+    if (currentMount !== null) buffer.push(line);
+  }
+  flush();
+  return { byMount };
+}
+
+/**
+ * Pick the single RAID array to advertise on a pool. UNAS Pro's basic configs
+ * are single-pool (1-2 drives in raid1 or a single linear), so matching by
+ * name is unnecessary overhead — we just return the first active array.
+ */
+function primaryRaid(arrays: MdArray[]): MdArray | null {
+  return arrays.find((a) => a.active && a.level) ?? arrays[0] ?? null;
+}
+
+function buildUnasPools(
+  dfRows: DfRow[],
+  mdArrays: MdArray[],
+  shareIndex: VolumeShareIndex,
+): StoragePool[] {
+  // 1. Drop rows we never want to surface.
+  const interesting = dfRows.filter(
+    (r) =>
+      r.totalBytes > 0 &&
+      !SYSTEM_MOUNT_RE.test(r.mount) &&
+      !HIDDEN_BIND_RE.test(r.mount),
+  );
+
+  // 2. Dedupe bind-mounts of the same underlying storage. When UniFi binds
+  //    /volume/<uuid>/.srv/... back to the same filesystem, `df` reports an
+  //    identical (totalBytes, usedBytes) pair — we keep the shortest mount
+  //    path for each (total,used) key, which is always the canonical root.
+  const byKey = new Map<string, DfRow>();
+  for (const r of interesting) {
+    const key = `${r.totalBytes}:${r.usedBytes}`;
+    const existing = byKey.get(key);
+    if (!existing || r.mount.length < existing.mount.length) {
+      byKey.set(key, r);
+    }
+  }
+
+  // 3. Assemble pools. The main UNAS volume (mount matches /volume/<uuid>/)
+  //    gets a friendly name ("Volume 1", "Volume 2", ...) and carries the
+  //    RAID level + user share list. Any residual mounts get their raw path.
+  const raid = primaryRaid(mdArrays);
+  const pools: StoragePool[] = [];
+  let volumeIndex = 1;
+  let raidAttached = false;
+  for (const r of Array.from(byKey.values()).sort((a, b) =>
+    a.mount.localeCompare(b.mount),
+  )) {
+    const isVolume = VOLUME_MOUNT_RE.test(r.mount);
+    const displayName = isVolume ? `Volume ${volumeIndex}` : r.mount.replace(/^\//, '');
+
+    // For volumes, look up the share list under this mount. The share index
+    // keys on the mount path (with trailing slash stripped).
+    const shares = isVolume ? shareIndex.byMount.get(r.mount) ?? [] : null;
+
+    // Attach RAID info to the first volume pool only. With only one mdstat
+    // array on UNAS Pro (typical single-pool config), this is unambiguous;
+    // multi-pool setups would need device-to-mount mapping we don't have.
+    const attachRaid = isVolume && !raidAttached;
+
+    pools.push({
+      name: displayName,
+      type: isVolume ? 'volume' : 'fs',
+      used: r.usedBytes,
+      total: r.totalBytes,
+      usedPct:
+        r.usedPct ??
+        (r.totalBytes > 0 ? (r.usedBytes / r.totalBytes) * 100 : null),
+      raidLevel: attachRaid ? raid?.level ?? null : null,
+      raidDevices: attachRaid ? raid?.deviceCount ?? null : null,
+      raidInSync: attachRaid ? raid?.devicesInSync ?? null : null,
+      shares: shares && shares.length > 0 ? shares : null,
+      backup: null,
+    });
+
+    if (isVolume) {
+      volumeIndex += 1;
+      if (attachRaid) raidAttached = true;
+    }
+  }
+
+  // Volumes first, then system/misc mounts; within each group, highest
+  // utilization first.
+  return pools.sort((a, b) => {
+    const aVol = a.type === 'volume' ? 0 : 1;
+    const bVol = b.type === 'volume' ? 0 : 1;
+    if (aVol !== bVol) return aVol - bVol;
+    return (b.usedPct ?? -1) - (a.usedPct ?? -1);
+  });
 }
 
 // Keep CpuSnapshot referenced so TS doesn't flag the import as unused when

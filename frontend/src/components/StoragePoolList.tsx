@@ -44,6 +44,11 @@ export function StoragePoolList({ pools, max = 6 }: StoragePoolListProps) {
       {shown.map(p => {
         const pct = p.usedPct ?? 0;
         const b = p.backup;
+        // RAID health: under-sync (M < N) paints the badge rose as a warning.
+        const raidDegraded =
+          p.raidDevices != null &&
+          p.raidInSync != null &&
+          p.raidInSync < p.raidDevices;
         return (
           <div key={p.name}>
             <div className="flex items-baseline justify-between mb-1 gap-2">
@@ -54,6 +59,30 @@ export function StoragePoolList({ pools, max = 6 }: StoragePoolListProps) {
                 {p.type && (
                   <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim">
                     {p.type}
+                  </span>
+                )}
+                {p.raidLevel && (
+                  <span
+                    className={clsx(
+                      'font-mono text-[0.6rem] uppercase tracking-[0.18em] rounded px-1.5 py-0.5 border',
+                      raidDegraded
+                        ? 'border-accent-rose/60 text-accent-rose'
+                        : 'border-accent-cyan/40 text-accent-cyan',
+                    )}
+                    title={
+                      p.raidDevices != null && p.raidInSync != null
+                        ? `${p.raidInSync}/${p.raidDevices} devices in sync`
+                        : undefined
+                    }
+                  >
+                    {p.raidLevel}
+                    {raidDegraded &&
+                      p.raidDevices != null &&
+                      p.raidInSync != null && (
+                        <span className="ml-1 font-normal text-accent-rose/80">
+                          {p.raidInSync}/{p.raidDevices}
+                        </span>
+                      )}
                   </span>
                 )}
               </div>
@@ -74,6 +103,19 @@ export function StoragePoolList({ pools, max = 6 }: StoragePoolListProps) {
                 style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
               />
             </div>
+            {p.shares && p.shares.length > 0 && (
+              <ul className="mt-1.5 ml-3 space-y-0.5 border-l border-border-strong/40 pl-2.5">
+                {p.shares.map((share) => (
+                  <li
+                    key={share}
+                    className="font-mono text-[0.65rem] text-text-muted tracking-wide"
+                  >
+                    <span className="text-text-dim mr-1.5">›</span>
+                    {share}
+                  </li>
+                ))}
+              </ul>
+            )}
             {b && (
               <div
                 className="mt-1 font-mono text-[0.65rem] text-text-dim flex items-center gap-2 flex-wrap"
