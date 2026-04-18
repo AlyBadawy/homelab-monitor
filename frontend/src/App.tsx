@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Header } from "./components/Header";
 import { Section } from "./components/Section";
+import { ServicesCard } from "./components/ServicesCard";
 import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
 import {
@@ -10,10 +11,12 @@ import {
   type TargetSummary,
 } from "./lib/api";
 
+// The 'service' kind is handled specially below (ServicesCard), so it's
+// deliberately not in any SECTIONS entry — only TargetCard-rendered kinds live here.
 const SECTIONS: Array<{ title: string; kinds: TargetSummary["kind"][] }> = [
   { title: "Hypervisor", kinds: ["proxmox-host"] },
   { title: "Virtual Machines & Containers", kinds: ["vm", "container"] },
-  { title: "Services", kinds: ["database", "service"] },
+  { title: "Databases", kinds: ["database"] },
   { title: "Storage", kinds: ["storage", "unas"] },
 ];
 
@@ -123,6 +126,13 @@ export default function App() {
             </Section>
           );
         })}
+
+        {/* Services always renders — the card has its own empty state with
+            an "Add service" call-to-action, so users can add their first
+            check without any prior data to trigger the section. */}
+        <Section title="Services">
+          <ServicesCard targets={targets} />
+        </Section>
 
         {targets.length === 0 && !fetchError && loading && (
           <div className="card text-center">
