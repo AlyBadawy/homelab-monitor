@@ -48,13 +48,11 @@ const KIND_LABEL: Record<TargetKind, string> = {
 
 interface TargetCardProps {
   target: TargetSummary;
-  /** Span multiple grid columns (used for the wider host card). */
-  wide?: boolean;
   /** Called when the user clicks the card to open the detail drawer. */
   onSelect?: (target: TargetSummary) => void;
 }
 
-export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) {
+export function TargetCard({ target, onSelect }: TargetCardProps) {
   const Icon = KIND_ICON[target.kind];
   const isHost = target.kind === 'proxmox-host';
   const isUnas = target.kind === 'unas';
@@ -99,7 +97,7 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
 
   return (
     <div
-      className={`card group ${wide ? 'sm:col-span-2 xl:col-span-2' : ''} ${
+      className={`card group ${
         clickable ? 'cursor-pointer focus-within:border-border-strong' : ''
       }`}
       onClick={clickable ? handleOpen : undefined}

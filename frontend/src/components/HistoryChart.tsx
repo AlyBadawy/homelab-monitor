@@ -119,8 +119,8 @@ export function HistoryChart({
 
   return (
     <div className="rounded-lg border border-border bg-bg-800/60 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="card-title">{title}</span>
           {hint && (
             <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim">
@@ -128,7 +128,7 @@ export function HistoryChart({
             </span>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
           {series.map((s) => (
             <div
               key={s.key}
@@ -288,32 +288,41 @@ export function HistoryChart({
         )}
 
         {hover && hasAny && (
-          <div
-            className="pointer-events-none absolute top-1 rounded-md border border-border bg-bg-900/90 px-2 py-1 font-mono text-[0.65rem] backdrop-blur-sm"
-            style={{
-              left: `calc(${(hover.x / width) * 100}% + 8px)`,
-              maxWidth: '40%',
-            }}
-          >
-            <div className="text-text-dim">
-              {fmtFullClock(longest[hover.idx]?.ts ?? 0)}
-            </div>
-            {series.map((s) => {
-              const ts = longest[hover.idx]?.ts;
-              if (ts === undefined) return null;
-              const p = nearestPoint(s.points, ts);
-              if (!p) return null;
-              return (
-                <div
-                  key={`t-${s.key}`}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <span style={{ color: s.stroke }}>{s.label}</span>
-                  <span className="text-text">{s.format(p.value)}</span>
+          // Flip the tooltip to the left side of the cursor once we're past
+          // the middle of the chart, so it never overflows the card.
+          (() => {
+            const pct = (hover.x / width) * 100;
+            const flip = pct > 55;
+            return (
+              <div
+                className="pointer-events-none absolute top-1 rounded-md border border-border bg-bg-900/90 px-2 py-1 font-mono text-[0.65rem] backdrop-blur-sm"
+                style={
+                  flip
+                    ? { right: `calc(${100 - pct}% + 8px)`, maxWidth: '45%' }
+                    : { left: `calc(${pct}% + 8px)`, maxWidth: '45%' }
+                }
+              >
+                <div className="text-text-dim">
+                  {fmtFullClock(longest[hover.idx]?.ts ?? 0)}
                 </div>
-              );
-            })}
-          </div>
+                {series.map((s) => {
+                  const ts = longest[hover.idx]?.ts;
+                  if (ts === undefined) return null;
+                  const p = nearestPoint(s.points, ts);
+                  if (!p) return null;
+                  return (
+                    <div
+                      key={`t-${s.key}`}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span style={{ color: s.stroke }}>{s.label}</span>
+                      <span className="text-text">{s.format(p.value)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         )}
       </div>
     </div>

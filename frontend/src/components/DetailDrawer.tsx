@@ -70,14 +70,17 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
         <span className="pointer-events-none absolute left-0 top-0 h-4 w-4 border-l-2 border-t-2 border-accent-cyan/60 rounded-tl-xl" />
         <span className="pointer-events-none absolute right-0 bottom-0 h-4 w-4 border-r-2 border-b-2 border-accent-cyan/30 rounded-br-xl" />
 
-        {/* Header */}
-        <div className="flex items-start justify-between border-b border-border p-4">
-          <div>
+        {/* Header — min-w-0 on the left cluster lets long target names truncate
+            instead of pushing the action buttons off the edge on mobile. */}
+        <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+          <div className="min-w-0 flex-1">
             <div className="card-title">
               {target.kind.toUpperCase()} · 24H HISTORY
             </div>
-            <div className="mt-1 flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-text">{target.name}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="truncate text-lg font-semibold text-text">
+                {target.name}
+              </h2>
               <StatusPill status={target.status} />
             </div>
             <div className="mt-1 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-text-dim">
@@ -90,7 +93,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={refresh}
               disabled={loading}
@@ -113,8 +116,8 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
           </div>
         </div>
 
-        {/* Charts */}
-        <div className="grid gap-3 p-4">
+        {/* Charts — tighter padding on mobile so charts get the most space. */}
+        <div className="grid gap-3 p-3 sm:p-4">
           {error && (
             <div className="rounded-md border border-accent-rose/40 bg-accent-rose/5 px-3 py-2 font-mono text-xs text-accent-rose">
               {error}

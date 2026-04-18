@@ -111,15 +111,12 @@ export default function App() {
         {SECTIONS.map((section) => {
           const items = targets.filter((t) => section.kinds.includes(t.kind));
           if (items.length === 0) return null;
-          const isHypervisor = section.title === "Hypervisor";
-          const isStorage = section.title === "Storage";
           return (
             <Section key={section.title} title={section.title}>
               {items.map((t) => (
                 <TargetCard
                   key={t.id}
                   target={t}
-                  wide={isHypervisor || (isStorage && t.kind === "unas")}
                   onSelect={(target) => setSelectedId(target.id)}
                 />
               ))}

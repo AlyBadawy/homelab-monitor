@@ -44,13 +44,16 @@ export function Sparkline({
   );
 
   if (points.length < 2) {
+    // When the caller supplies width/height classes (e.g. `w-full h-[22px]`),
+    // those win; otherwise fall back to the pixel defaults via inline style.
+    const hasSizingClass = !!className && /\b(w-|h-)/.test(className);
     return (
       <div
         className={clsx(
           'flex items-center justify-end font-mono text-[0.55rem] uppercase tracking-[0.16em] text-text-dim/60',
           className,
         )}
-        style={{ width, height }}
+        style={hasSizingClass ? undefined : { width, height }}
         aria-label={ariaLabel ?? 'no history yet'}
       >
         collecting…
