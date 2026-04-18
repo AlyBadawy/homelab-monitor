@@ -5,6 +5,11 @@ interface SectionProps {
   accessory?: ReactNode;
 }
 
+/**
+ * Titled section wrapper. The body is free-form — the caller supplies its
+ * own grid or layout so sections can differ (e.g. 2-up infrastructure row
+ * vs. VM rows with dynamic column counts).
+ */
 export function Section({
   title,
   accessory,
@@ -19,9 +24,7 @@ export function Section({
         </div>
         {accessory}
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {children}
-      </div>
+      {children}
     </section>
   );
 }

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Header } from "./components/Header";
 import { Section } from "./components/Section";
+import { CardRow } from "./components/CardRow";
 import { ServicesCard } from "./components/ServicesCard";
 import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
@@ -10,15 +11,6 @@ import {
   type SummaryErrors,
   type TargetSummary,
 } from "./lib/api";
-
-// The 'service' kind is handled specially below (ServicesCard), so it's
-// deliberately not in any SECTIONS entry — only TargetCard-rendered kinds live here.
-const SECTIONS: Array<{ title: string; kinds: TargetSummary["kind"][] }> = [
-  { title: "Hypervisor", kinds: ["proxmox-host"] },
-  { title: "Virtual Machines & Containers", kinds: ["vm", "container"] },
-  { title: "Databases", kinds: ["database"] },
-  { title: "Storage", kinds: ["storage", "unas"] },
-];
 
 export default function App() {
   const [targets, setTargets] = useState<TargetSummary[]>([]);
@@ -62,6 +54,30 @@ export default function App() {
       window.clearInterval(id);
     };
   }, [load]);
+
+  // Bucket targets by role for the new layout:
+  //   Infrastructure row = Proxmox host(s) + UNAS/storage devices.
+  //   VMs row            = VMs + LXCs (max 3 per row, fills full width).
+  //   Databases row      = DB targets (same rules as VMs).
+  // Services are rendered separately via <ServicesCard>.
+  const { infra, vms, databases } = useMemo(() => {
+    const infra: TargetSummary[] = [];
+    const vms: TargetSummary[] = [];
+    const databases: TargetSummary[] = [];
+    for (const t of targets) {
+      if (t.kind === "proxmox-host" || t.kind === "unas" || t.kind === "storage") {
+        infra.push(t);
+      } else if (t.kind === "vm" || t.kind === "container") {
+        vms.push(t);
+      } else if (t.kind === "database") {
+        databases.push(t);
+      }
+      // `service` kind is intentionally omitted — ServicesCard owns it.
+    }
+    return { infra, vms, databases };
+  }, [targets]);
+
+  const onSelect = (t: TargetSummary) => setSelectedId(t.id);
 
   return (
     <div className="min-h-screen">
@@ -108,28 +124,58 @@ export default function App() {
           </div>
         )}
 
-        {SECTIONS.map((section) => {
-          const items = targets.filter((t) => section.kinds.includes(t.kind));
-          if (items.length === 0) return null;
-          return (
-            <Section key={section.title} title={section.title}>
-              {items.map((t) => (
-                <TargetCard
-                  key={t.id}
-                  target={t}
-                  onSelect={(target) => setSelectedId(target.id)}
-                />
-              ))}
-            </Section>
-          );
-        })}
-
-        {/* Services always renders — the card has its own empty state with
-            an "Add service" call-to-action, so users can add their first
-            check without any prior data to trigger the section. */}
+        {/* 1) Services — always at the top. The card owns its own empty
+            state with an "Add service" CTA, so it renders even with no
+            checks yet. */}
         <Section title="Services">
           <ServicesCard targets={targets} />
         </Section>
+
+        {/* 2) Infrastructure — Proxmox host + UNAS side-by-side on md+,
+            stacked on mobile. Each card takes exactly half the row width
+            so the pair spans the same area as the Services card above. */}
+        {infra.length > 0 && (
+          <Section title="Infrastructure">
+            <CardRow
+              items={infra}
+              maxPerRow={2}
+              keyFor={(t) => t.id}
+              renderItem={(t) => (
+                <TargetCard target={t} onSelect={onSelect} />
+              )}
+            />
+          </Section>
+        )}
+
+        {/* 3) VMs & containers — up to 3 per row. Every row fills the full
+            services-row width: 1 VM = 100%, 2 = halves, 3 = thirds, 4 =
+            row of 3 + full-width row of 1, and so on. */}
+        {vms.length > 0 && (
+          <Section title="Virtual Machines & Containers">
+            <CardRow
+              items={vms}
+              maxPerRow={3}
+              keyFor={(t) => t.id}
+              renderItem={(t) => (
+                <TargetCard target={t} onSelect={onSelect} />
+              )}
+            />
+          </Section>
+        )}
+
+        {/* 4) Databases — same rules as VMs. */}
+        {databases.length > 0 && (
+          <Section title="Databases">
+            <CardRow
+              items={databases}
+              maxPerRow={3}
+              keyFor={(t) => t.id}
+              renderItem={(t) => (
+                <TargetCard target={t} onSelect={onSelect} />
+              )}
+            />
+          </Section>
+        )}
 
         {targets.length === 0 && !fetchError && loading && (
           <div className="card text-center">
