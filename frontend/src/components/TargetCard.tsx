@@ -11,6 +11,8 @@ import {
   Archive,
   Clock,
   Thermometer,
+  Globe,
+  Gauge,
   Expand,
   type LucideIcon,
 } from 'lucide-react';
@@ -31,6 +33,7 @@ const KIND_ICON: Record<TargetKind, LucideIcon> = {
   database: Database,
   storage: HardDrive,
   unas: HardDriveDownload,
+  service: Globe,
 };
 
 const KIND_LABEL: Record<TargetKind, string> = {
@@ -40,6 +43,7 @@ const KIND_LABEL: Record<TargetKind, string> = {
   database: 'DATABASE',
   storage: 'STORAGE',
   unas: 'UNAS',
+  service: 'SERVICE',
 };
 
 interface TargetCardProps {
@@ -54,6 +58,7 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
   const Icon = KIND_ICON[target.kind];
   const isHost = target.kind === 'proxmox-host';
   const isUnas = target.kind === 'unas';
+  const isService = target.kind === 'service';
   const showMiniStats = target.kind === 'vm' || target.kind === 'container';
 
   // Metrics we care about per-card — kept lean for the inline sparklines.
@@ -61,12 +66,13 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
   // MetricBar is already a bar-graph and (b) it keeps the per-card request
   // small. The detail drawer fetches the full set.
   const metrics = useMemo(() => {
+    if (isService) return ['http_latency_ms'];
     const m = ['cpu_pct', 'mem_pct'];
     if (showMiniStats) {
       m.push('net_in_bps', 'net_out_bps');
     }
     return m;
-  }, [showMiniStats]);
+  }, [showMiniStats, isService]);
 
   const { series } = useHistory(target.id, metrics, {
     points: 120,       // sparkline-sized
@@ -135,45 +141,54 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
         </div>
       </div>
 
-      <div className="space-y-3">
-        <MetricBar
-          label="CPU"
-          value={target.cpuPct}
-          sparkline={
-            <Sparkline
-              points={cpuPoints}
-              width={80}
-              height={14}
-              domain={[0, 100]}
-              stroke="#22d3ee"
-              fill="rgba(34, 211, 238, 0.12)"
-              ariaLabel="CPU history"
-            />
-          }
-        />
-        <MetricBar
-          label="Memory"
-          value={target.memPct}
-          sparkline={
-            <Sparkline
-              points={memPoints}
-              width={80}
-              height={14}
-              domain={[0, 100]}
-              stroke="#34d399"
-              fill="rgba(52, 211, 153, 0.12)"
-              ariaLabel="Memory history"
-            />
-          }
-        />
-        {!isHost && !isUnas && (
+      {!isService && (
+        <div className="space-y-3">
           <MetricBar
-            label="Disk"
-            value={target.diskPct}
-            unavailableReason={target.diskUnavailableReason}
+            label="CPU"
+            value={target.cpuPct}
+            sparkline={
+              <Sparkline
+                points={cpuPoints}
+                width={80}
+                height={14}
+                domain={[0, 100]}
+                stroke="#22d3ee"
+                fill="rgba(34, 211, 238, 0.12)"
+                ariaLabel="CPU history"
+              />
+            }
           />
-        )}
-      </div>
+          <MetricBar
+            label="Memory"
+            value={target.memPct}
+            sparkline={
+              <Sparkline
+                points={memPoints}
+                width={80}
+                height={14}
+                domain={[0, 100]}
+                stroke="#34d399"
+                fill="rgba(52, 211, 153, 0.12)"
+                ariaLabel="Memory history"
+              />
+            }
+          />
+          {!isHost && !isUnas && (
+            <MetricBar
+              label="Disk"
+              value={target.diskPct}
+              unavailableReason={target.diskUnavailableReason}
+            />
+          )}
+        </div>
+      )}
+
+      {isService && (
+        <ServiceBody
+          target={target}
+          latencyPoints={series.http_latency_ms ?? []}
+        />
+      )}
 
       {showMiniStats && (
         <div className="mt-4 pt-3 border-t border-border">
@@ -313,7 +328,7 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
         </>
       )}
 
-      {!showMiniStats && !isHost && !isUnas && (
+      {!showMiniStats && !isHost && !isUnas && !isService && (
         <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
           <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
             Uptime
@@ -330,5 +345,76 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
         </div>
       )}
     </div>
+  );
+}
+
+/* ---------------- service kind ---------------- */
+
+function latencyTone(ms: number | null | undefined): 'muted' | 'amber' | 'rose' {
+  if (ms === null || ms === undefined) return 'muted';
+  if (ms >= 2000) return 'rose';
+  if (ms >= 750) return 'amber';
+  return 'muted';
+}
+
+interface ServiceBodyProps {
+  target: TargetSummary;
+  latencyPoints: Array<{ ts: number; value: number }>;
+}
+
+function ServiceBody({ target, latencyPoints }: ServiceBodyProps) {
+  const statusCode = target.httpStatusCode;
+  const latency = target.latencyMs;
+  return (
+    <>
+      {target.url && (
+        <div
+          className="mb-3 font-mono text-[0.7rem] text-text-dim truncate"
+          title={target.url}
+        >
+          {target.url}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <MiniStat
+          icon={Gauge}
+          label="Latency"
+          value={latency === null || latency === undefined ? '—' : `${latency} ms`}
+          tone={latencyTone(latency)}
+          title="Wall-clock time of the last GET"
+        />
+        <MiniStat
+          icon={Globe}
+          label="HTTP"
+          value={statusCode === null || statusCode === undefined ? '—' : String(statusCode)}
+          tone={
+            statusCode === null || statusCode === undefined
+              ? 'rose'
+              : statusCode >= 200 && statusCode < 300
+                ? 'emerald'
+                : 'rose'
+          }
+          title="Last response status code"
+        />
+      </div>
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim">
+            Latency · 24h
+          </span>
+        </div>
+        <Sparkline
+          points={latencyPoints}
+          width={400}
+          height={28}
+          baselineZero
+          stroke="#a78bfa"
+          fill="rgba(167, 139, 250, 0.10)"
+          strokeWidth={1.25}
+          className="h-7 w-full"
+          ariaLabel="Latency history"
+        />
+      </div>
+    </>
   );
 }

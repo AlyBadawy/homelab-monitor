@@ -9,7 +9,8 @@ export type TargetKind =
   | 'container'
   | 'database'
   | 'storage'
-  | 'unas';
+  | 'unas'
+  | 'service';
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -72,6 +73,10 @@ export interface TargetSummary {
   drives?: UnasDrive[];         // present on unas
   /** Max temperature across thermal zones (°C). Present on unas when readable. */
   cpuTempC?: number | null;
+  /** HTTP service fields — only populated on kind='service'. */
+  url?: string;
+  httpStatusCode?: number | null;
+  latencyMs?: number | null;
   updatedAt: number;
   error?: string;               // present when the last poll failed
 }

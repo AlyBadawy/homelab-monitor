@@ -13,7 +13,7 @@ import {
 const SECTIONS: Array<{ title: string; kinds: TargetSummary["kind"][] }> = [
   { title: "Hypervisor", kinds: ["proxmox-host"] },
   { title: "Virtual Machines & Containers", kinds: ["vm", "container"] },
-  { title: "Services", kinds: ["database"] },
+  { title: "Services", kinds: ["database", "service"] },
   { title: "Storage", kinds: ["storage", "unas"] },
 ];
 

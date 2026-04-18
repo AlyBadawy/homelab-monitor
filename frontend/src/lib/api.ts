@@ -9,7 +9,8 @@ export type TargetKind =
   | 'container'
   | 'database'
   | 'storage'
-  | 'unas';
+  | 'unas'
+  | 'service';
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -60,6 +61,10 @@ export interface TargetSummary {
   drives?: UnasDrive[];
   /** Max temperature across thermal zones (°C) — only populated for UNAS. */
   cpuTempC?: number | null;
+  /** HTTP service fields — only populated on kind='service'. */
+  url?: string;
+  httpStatusCode?: number | null;
+  latencyMs?: number | null;
   updatedAt: number;
   error?: string;
 }
@@ -137,4 +142,71 @@ export async function fetchHistory(
   const r = await fetch(url, { signal: opts.signal });
   if (!r.ok) throw new Error(`history failed: ${r.status}`);
   return (await r.json()) as HistoryResponse;
+}
+
+/* ---- HTTP service checks (CRUD) -------------------------------------- */
+
+export interface ServiceCheck {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  expectedStatus: number | null;
+  timeoutMs: number;
+  insecureTls: boolean;
+  createdAt: number;
+}
+
+export interface CreateServiceCheckInput {
+  name: string;
+  url: string;
+  expectedStatus?: number | null;
+  timeoutMs?: number;
+  insecureTls?: boolean;
+  enabled?: boolean;
+}
+
+export async function listServiceChecks(): Promise<ServiceCheck[]> {
+  const r = await fetch('/api/services');
+  if (!r.ok) throw new Error(`list checks failed: ${r.status}`);
+  const body = (await r.json()) as { checks: ServiceCheck[] };
+  return body.checks;
+}
+
+export async function createServiceCheck(
+  input: CreateServiceCheckInput,
+): Promise<ServiceCheck> {
+  const r = await fetch('/api/services', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `create failed: ${r.status}`);
+  }
+  return (await r.json()) as ServiceCheck;
+}
+
+export async function updateServiceCheck(
+  id: string,
+  patch: Partial<CreateServiceCheckInput>,
+): Promise<ServiceCheck> {
+  const r = await fetch(`/api/services/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `update failed: ${r.status}`);
+  }
+  return (await r.json()) as ServiceCheck;
+}
+
+export async function deleteServiceCheck(id: string): Promise<void> {
+  const r = await fetch(`/api/services/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!r.ok) throw new Error(`delete failed: ${r.status}`);
 }

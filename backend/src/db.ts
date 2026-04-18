@@ -45,6 +45,17 @@ export function initDb(opts: InitDbOptions = {}): void {
 
     CREATE INDEX IF NOT EXISTS idx_samples_target_metric_ts
       ON samples(target_id, metric, ts DESC);
+
+    CREATE TABLE IF NOT EXISTS service_checks (
+      id              TEXT    PRIMARY KEY,
+      name            TEXT    NOT NULL,
+      url             TEXT    NOT NULL,
+      enabled         INTEGER NOT NULL DEFAULT 1,
+      expected_status INTEGER,
+      timeout_ms      INTEGER NOT NULL DEFAULT 5000,
+      insecure_tls    INTEGER NOT NULL DEFAULT 0,
+      created_at      INTEGER NOT NULL
+    );
   `);
 
   stmtInsert = db.prepare(

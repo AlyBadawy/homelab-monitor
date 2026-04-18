@@ -4,8 +4,11 @@ import dotenv from 'dotenv';
 import { loadConfig } from './config';
 import { closeDb, initDb } from './db';
 import statsRouter from './routes/stats';
+import servicesRouter from './routes/services';
 import { ProxmoxPoller } from './proxmox/poller';
 import { UnasPoller } from './unas/poller';
+import { ServiceHealthPoller } from './services/poller';
+import { listChecks } from './services/repo';
 
 dotenv.config();
 
@@ -27,6 +30,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/stats', statsRouter);
+app.use('/api/services', servicesRouter);
 
 // --- Pollers ---
 let proxmoxPoller: ProxmoxPoller | null = null;
@@ -55,6 +59,14 @@ if (cfg.unas.enabled) {
   );
 }
 
+// Service health poller always runs; if the DB has no checks, it no-ops.
+const serviceHealthPoller = new ServiceHealthPoller(cfg);
+serviceHealthPoller.start();
+// eslint-disable-next-line no-console
+console.log(
+  `[homelab-monitor] service-health poller started (${listChecks().length} checks)`,
+);
+
 const server = app.listen(cfg.port, () => {
   // eslint-disable-next-line no-console
   console.log(`[homelab-monitor] backend listening on :${cfg.port}`);
@@ -65,6 +77,7 @@ function shutdown(signal: string): void {
   console.log(`[homelab-monitor] ${signal} received, shutting down…`);
   proxmoxPoller?.stop();
   unasPoller?.stop();
+  serviceHealthPoller.stop();
   server.close(() => {
     closeDb();
     process.exit(0);

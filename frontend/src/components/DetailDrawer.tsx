@@ -50,6 +50,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
 
   const isHost = target.kind === 'proxmox-host';
   const isUnas = target.kind === 'unas';
+  const isService = target.kind === 'service';
   const hasStoragePools = isHost || isUnas;
   const hasNet =
     target.netInBps !== undefined && target.netOutBps !== undefined;
@@ -120,39 +121,79 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             </div>
           )}
 
-          <HistoryChart
-            title="CPU"
-            hint="percent · 24h"
-            baselineZero
-            ceiling={100}
-            series={[
-              {
-                key: 'cpu_pct',
-                label: 'CPU',
-                points: series.cpu_pct ?? [],
-                stroke: '#22d3ee',
-                fill: 'rgba(34, 211, 238, 0.10)',
-                format: (v) => `${v.toFixed(1)}%`,
-              },
-            ]}
-          />
+          {!isService && (
+            <>
+              <HistoryChart
+                title="CPU"
+                hint="percent · 24h"
+                baselineZero
+                ceiling={100}
+                series={[
+                  {
+                    key: 'cpu_pct',
+                    label: 'CPU',
+                    points: series.cpu_pct ?? [],
+                    stroke: '#22d3ee',
+                    fill: 'rgba(34, 211, 238, 0.10)',
+                    format: (v) => `${v.toFixed(1)}%`,
+                  },
+                ]}
+              />
 
-          <HistoryChart
-            title="Memory"
-            hint="percent · 24h"
-            baselineZero
-            ceiling={100}
-            series={[
-              {
-                key: 'mem_pct',
-                label: 'Memory',
-                points: series.mem_pct ?? [],
-                stroke: '#34d399',
-                fill: 'rgba(52, 211, 153, 0.10)',
-                format: (v) => `${v.toFixed(1)}%`,
-              },
-            ]}
-          />
+              <HistoryChart
+                title="Memory"
+                hint="percent · 24h"
+                baselineZero
+                ceiling={100}
+                series={[
+                  {
+                    key: 'mem_pct',
+                    label: 'Memory',
+                    points: series.mem_pct ?? [],
+                    stroke: '#34d399',
+                    fill: 'rgba(52, 211, 153, 0.10)',
+                    format: (v) => `${v.toFixed(1)}%`,
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {isService && (
+            <>
+              <HistoryChart
+                title="Latency"
+                hint="ms · 24h"
+                baselineZero
+                series={[
+                  {
+                    key: 'http_latency_ms',
+                    label: 'Latency',
+                    points: series.http_latency_ms ?? [],
+                    stroke: '#a78bfa',
+                    fill: 'rgba(167, 139, 250, 0.10)',
+                    format: (v) => `${Math.round(v)} ms`,
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Availability"
+                hint="up/down · 24h"
+                baselineZero
+                ceiling={1}
+                series={[
+                  {
+                    key: 'http_up',
+                    label: 'Up',
+                    points: series.http_up ?? [],
+                    stroke: '#34d399',
+                    fill: 'rgba(52, 211, 153, 0.10)',
+                    format: (v) => (v >= 0.5 ? 'UP' : 'DOWN'),
+                  },
+                ]}
+              />
+            </>
+          )}
 
           {hasNet && (
             <HistoryChart
@@ -202,6 +243,9 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
 /* ---------- helpers ---------- */
 
 function computeMetricsForTarget(target: TargetSummary): string[] {
+  if (target.kind === 'service') {
+    return ['http_latency_ms', 'http_up'];
+  }
   const base = ['cpu_pct', 'mem_pct'];
   if (target.kind === 'vm' || target.kind === 'container') {
     base.push('disk_pct', 'net_in_bps', 'net_out_bps');
