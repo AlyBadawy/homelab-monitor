@@ -11,12 +11,29 @@ export interface ProxmoxConfig {
   insecureTls: boolean;     // skip TLS verification (for self-signed upstream)
 }
 
+export interface UnasConfig {
+  enabled: boolean;
+  /** Display name shown on the UI card. */
+  name: string;
+  host: string;             // e.g. 172.20.20.2
+  port: number;             // ssh port, default 22
+  user: string;             // ssh user (ideally read-only)
+  /** Path to private key (mounted read-only into the container). */
+  privateKeyPath: string | null;
+  passphrase: string | null;
+  /** Password fallback — discouraged; key auth is preferred. */
+  password: string | null;
+  /** Hard ceiling for a batch of read-only commands. */
+  execTimeoutMs: number;
+}
+
 export interface AppConfig {
   port: number;
   dataDir: string;
   pollIntervalMs: number;
   historyRetentionMs: number;
   proxmox: ProxmoxConfig;
+  unas: UnasConfig;
 }
 
 function envBool(name: string, def = false): boolean {
@@ -38,6 +55,13 @@ export function loadConfig(): AppConfig {
   const tokenSecret = process.env.PROXMOX_TOKEN_SECRET ?? '';
   const proxmoxEnabled = Boolean(baseUrl && tokenId && tokenSecret);
 
+  const unasHost = (process.env.UNAS_HOST ?? '').trim();
+  const unasUser = (process.env.UNAS_USER ?? '').trim();
+  const unasKeyPath = (process.env.UNAS_SSH_KEY_PATH ?? '').trim() || null;
+  const unasPassword = process.env.UNAS_PASSWORD ?? null;
+  // Considered enabled when we have host+user and at least one credential.
+  const unasEnabled = Boolean(unasHost && unasUser && (unasKeyPath || unasPassword));
+
   const cfg: AppConfig = {
     port: envInt('PORT', 4000),
     dataDir: process.env.DATA_DIR ?? '/data',
@@ -50,13 +74,25 @@ export function loadConfig(): AppConfig {
       tokenSecret,
       insecureTls: envBool('PROXMOX_INSECURE_TLS', false),
     },
+    unas: {
+      enabled: unasEnabled,
+      name: process.env.UNAS_NAME ?? 'UNAS',
+      host: unasHost,
+      port: envInt('UNAS_PORT', 22),
+      user: unasUser,
+      privateKeyPath: unasKeyPath,
+      passphrase: process.env.UNAS_SSH_KEY_PASSPHRASE ?? null,
+      password: unasPassword,
+      execTimeoutMs: envInt('UNAS_EXEC_TIMEOUT_MS', 15_000),
+    },
   };
 
   // eslint-disable-next-line no-console
   console.log(
     `[homelab-monitor] config: port=${cfg.port} poll=${cfg.pollIntervalMs}ms ` +
       `proxmox=${cfg.proxmox.enabled ? cfg.proxmox.baseUrl : 'disabled'} ` +
-      `insecureTls=${cfg.proxmox.insecureTls}`,
+      `insecureTls=${cfg.proxmox.insecureTls} ` +
+      `unas=${cfg.unas.enabled ? `${cfg.unas.user}@${cfg.unas.host}:${cfg.unas.port}` : 'disabled'}`,
   );
 
   return cfg;

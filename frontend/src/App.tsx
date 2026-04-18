@@ -14,7 +14,7 @@ const SECTIONS: Array<{ title: string; kinds: TargetSummary["kind"][] }> = [
   { title: "Hypervisor", kinds: ["proxmox-host"] },
   { title: "Virtual Machines & Containers", kinds: ["vm", "container"] },
   { title: "Services", kinds: ["database"] },
-  { title: "Storage", kinds: ["storage"] },
+  { title: "Storage", kinds: ["storage", "unas"] },
 ];
 
 export default function App() {
@@ -24,6 +24,7 @@ export default function App() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [apiErrors, setApiErrors] = useState<SummaryErrors>({
     proxmox: null,
+    unas: null,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -92,17 +93,30 @@ export default function App() {
           </div>
         )}
 
+        {apiErrors.unas && (
+          <div className="card border-accent-amber/40 bg-accent-amber/5">
+            <div className="flex items-center gap-2 card-title text-accent-amber">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              UNAS poller error
+            </div>
+            <p className="mt-2 font-mono text-sm text-text-muted break-all">
+              {apiErrors.unas}
+            </p>
+          </div>
+        )}
+
         {SECTIONS.map((section) => {
           const items = targets.filter((t) => section.kinds.includes(t.kind));
           if (items.length === 0) return null;
           const isHypervisor = section.title === "Hypervisor";
+          const isStorage = section.title === "Storage";
           return (
             <Section key={section.title} title={section.title}>
               {items.map((t) => (
                 <TargetCard
                   key={t.id}
                   target={t}
-                  wide={isHypervisor}
+                  wide={isHypervisor || (isStorage && t.kind === "unas")}
                   onSelect={(target) => setSelectedId(target.id)}
                 />
               ))}

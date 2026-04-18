@@ -5,6 +5,7 @@ import { loadConfig } from './config';
 import { closeDb, initDb } from './db';
 import statsRouter from './routes/stats';
 import { ProxmoxPoller } from './proxmox/poller';
+import { UnasPoller } from './unas/poller';
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
     status: 'ok',
     uptimeSec: Math.round(process.uptime()),
     proxmox: cfg.proxmox.enabled ? 'enabled' : 'disabled',
+    unas: cfg.unas.enabled ? 'enabled' : 'disabled',
   });
 });
 
@@ -40,6 +42,19 @@ if (cfg.proxmox.enabled) {
   );
 }
 
+let unasPoller: UnasPoller | null = null;
+if (cfg.unas.enabled) {
+  unasPoller = new UnasPoller(cfg);
+  unasPoller.start();
+  // eslint-disable-next-line no-console
+  console.log('[homelab-monitor] unas poller started');
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[homelab-monitor] unas disabled (missing UNAS_HOST/UNAS_USER and a credential)',
+  );
+}
+
 const server = app.listen(cfg.port, () => {
   // eslint-disable-next-line no-console
   console.log(`[homelab-monitor] backend listening on :${cfg.port}`);
@@ -49,6 +64,7 @@ function shutdown(signal: string): void {
   // eslint-disable-next-line no-console
   console.log(`[homelab-monitor] ${signal} received, shutting down…`);
   proxmoxPoller?.stop();
+  unasPoller?.stop();
   server.close(() => {
     closeDb();
     process.exit(0);

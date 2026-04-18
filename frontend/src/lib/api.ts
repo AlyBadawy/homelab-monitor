@@ -8,7 +8,8 @@ export type TargetKind =
   | 'vm'
   | 'container'
   | 'database'
-  | 'storage';
+  | 'storage'
+  | 'unas';
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -29,6 +30,18 @@ export interface StoragePool {
   backup: StoragePoolBackup | null;
 }
 
+export interface UnasDrive {
+  device: string;
+  model: string | null;
+  serial: string | null;
+  firmware: string | null;
+  health: 'PASSED' | 'FAILED' | null;
+  temperatureC: number | null;
+  powerOnHours: number | null;
+  capacityBytes: number | null;
+  smartErrorBits: number | null;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -43,12 +56,17 @@ export interface TargetSummary {
   netOutBps?: number | null;
   backupCount?: number | null;
   storages?: StoragePool[];
+  /** Drives discovered on the UNAS (SMART + temp). */
+  drives?: UnasDrive[];
+  /** Max temperature across thermal zones (°C) — only populated for UNAS. */
+  cpuTempC?: number | null;
   updatedAt: number;
   error?: string;
 }
 
 export interface SummaryErrors {
   proxmox: string | null;
+  unas: string | null;
 }
 
 export interface SummaryResponse {
@@ -69,6 +87,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
   status: string;
   uptimeSec: number;
   proxmox: 'enabled' | 'disabled';
+  unas: 'enabled' | 'disabled';
 }> {
   const r = await fetch('/api/health', { signal });
   if (!r.ok) throw new Error(`health failed: ${r.status}`);
@@ -76,6 +95,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
     status: string;
     uptimeSec: number;
     proxmox: 'enabled' | 'disabled';
+    unas: 'enabled' | 'disabled';
   };
 }
 

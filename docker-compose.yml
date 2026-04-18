@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.4.3
+    image: homelab-monitor-backend:0.5.0
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -31,8 +31,26 @@ services:
 
       # Set to "true" when using the direct IP (self-signed cert).
       PROXMOX_INSECURE_TLS: "${PROXMOX_INSECURE_TLS:-false}"
+
+      # ----- UNAS (UniFi UNAS Pro, via SSH) -----
+      # Create a read-only key pair on the Docker host, drop the private key
+      # at ./secrets/unas_id_ed25519, and append the public key to the UNAS
+      # user's ~/.ssh/authorized_keys. Key auth is strongly preferred over
+      # password auth.
+      UNAS_NAME: "${UNAS_NAME:-UNAS}"
+      UNAS_HOST: "${UNAS_HOST:-172.20.20.2}"
+      UNAS_PORT: "${UNAS_PORT:-22}"
+      UNAS_USER: "${UNAS_USER:-root}"
+      UNAS_SSH_KEY_PATH: "${UNAS_SSH_KEY_PATH:-/secrets/unas_id_ed25519}"
+      UNAS_SSH_KEY_PASSPHRASE: "${UNAS_SSH_KEY_PASSPHRASE:-}"
+      # Password fallback — discouraged. Leave empty if using a key.
+      UNAS_PASSWORD: "${UNAS_PASSWORD:-}"
+      UNAS_EXEC_TIMEOUT_MS: "${UNAS_EXEC_TIMEOUT_MS:-15000}"
     volumes:
       - backend_data:/data
+      # Read-only mount for the UNAS SSH private key. Create ./secrets on the
+      # Docker host and place the key there; it never leaves the backend.
+      - ./secrets:/secrets:ro
     networks:
       - homelab-monitor
     # No exposed ports by default — frontend proxies to it internally.
@@ -44,7 +62,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.4.3
+    image: homelab-monitor-frontend:0.5.0
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

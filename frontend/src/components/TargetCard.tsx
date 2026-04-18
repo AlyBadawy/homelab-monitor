@@ -5,10 +5,12 @@ import {
   Box,
   Database,
   HardDrive,
+  HardDriveDownload,
   ArrowDownToLine,
   ArrowUpFromLine,
   Archive,
   Clock,
+  Thermometer,
   Expand,
   type LucideIcon,
 } from 'lucide-react';
@@ -16,6 +18,7 @@ import type { TargetSummary, TargetKind } from '../lib/api';
 import { StatusPill } from './StatusPill';
 import { MetricBar } from './MetricBar';
 import { StoragePoolList } from './StoragePoolList';
+import { DrivesTable } from './DrivesTable';
 import { MiniStat } from './MiniStat';
 import { Sparkline } from './Sparkline';
 import { useHistory } from '../lib/useHistory';
@@ -27,6 +30,7 @@ const KIND_ICON: Record<TargetKind, LucideIcon> = {
   container: Box,
   database: Database,
   storage: HardDrive,
+  unas: HardDriveDownload,
 };
 
 const KIND_LABEL: Record<TargetKind, string> = {
@@ -35,6 +39,7 @@ const KIND_LABEL: Record<TargetKind, string> = {
   container: 'CONTAINER',
   database: 'DATABASE',
   storage: 'STORAGE',
+  unas: 'UNAS',
 };
 
 interface TargetCardProps {
@@ -48,6 +53,7 @@ interface TargetCardProps {
 export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) {
   const Icon = KIND_ICON[target.kind];
   const isHost = target.kind === 'proxmox-host';
+  const isUnas = target.kind === 'unas';
   const showMiniStats = target.kind === 'vm' || target.kind === 'container';
 
   // Metrics we care about per-card — kept lean for the inline sparklines.
@@ -160,7 +166,7 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
             />
           }
         />
-        {!isHost && (
+        {!isHost && !isUnas && (
           <MetricBar
             label="Disk"
             value={target.diskPct}
@@ -263,7 +269,51 @@ export function TargetCard({ target, wide = false, onSelect }: TargetCardProps) 
         </div>
       )}
 
-      {!showMiniStats && !isHost && (
+      {isUnas && (
+        <>
+          <div className="mt-4 pt-3 border-t border-border">
+            <div className="grid grid-cols-2 gap-2">
+              <MiniStat
+                icon={Thermometer}
+                label="CPU Temp"
+                value={
+                  target.cpuTempC === null || target.cpuTempC === undefined
+                    ? '—'
+                    : `${target.cpuTempC.toFixed(0)}°C`
+                }
+                tone={
+                  target.cpuTempC && target.cpuTempC >= 75
+                    ? 'rose'
+                    : target.cpuTempC && target.cpuTempC >= 65
+                      ? 'amber'
+                      : 'muted'
+                }
+                title="Max temperature across thermal zones"
+              />
+              <MiniStat
+                icon={Clock}
+                label="Uptime"
+                value={fmtUptime(target.uptimeSec)}
+                tone="muted"
+              />
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-border">
+            <div className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
+              Storage Pools
+            </div>
+            <StoragePoolList pools={target.storages ?? []} />
+          </div>
+          <div className="mt-4 pt-3 border-t border-border">
+            <div className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
+              Drives
+            </div>
+            <DrivesTable drives={target.drives ?? []} />
+          </div>
+        </>
+      )}
+
+      {!showMiniStats && !isHost && !isUnas && (
         <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
           <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
             Uptime

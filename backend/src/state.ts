@@ -8,7 +8,8 @@ export type TargetKind =
   | 'vm'
   | 'container'
   | 'database'
-  | 'storage';
+  | 'storage'
+  | 'unas';
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -36,6 +37,21 @@ export interface StoragePool {
   backup: StoragePoolBackup | null;
 }
 
+export interface UnasDrive {
+  /** Full device path, e.g. /dev/sda or /dev/nvme0n1. */
+  device: string;
+  model: string | null;
+  serial: string | null;
+  firmware: string | null;
+  /** Overall SMART self-assessment. null when smartctl couldn't read it. */
+  health: 'PASSED' | 'FAILED' | null;
+  temperatureC: number | null;
+  powerOnHours: number | null;
+  capacityBytes: number | null;
+  /** smartctl exit code if it surfaced issues (see `man smartctl`). */
+  smartErrorBits: number | null;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -52,7 +68,10 @@ export interface TargetSummary {
   netOutBps?: number | null;
   /** Number of backups found across every backup-content storage for this VM. */
   backupCount?: number | null;
-  storages?: StoragePool[];     // present on proxmox-host
+  storages?: StoragePool[];     // present on proxmox-host + unas
+  drives?: UnasDrive[];         // present on unas
+  /** Max temperature across thermal zones (°C). Present on unas when readable. */
+  cpuTempC?: number | null;
   updatedAt: number;
   error?: string;               // present when the last poll failed
 }
@@ -60,12 +79,14 @@ export interface TargetSummary {
 interface Snapshot {
   targets: Map<string, TargetSummary>;
   lastProxmoxError: string | null;
+  lastUnasError: string | null;
   generatedAt: number;
 }
 
 const snapshot: Snapshot = {
   targets: new Map(),
   lastProxmoxError: null,
+  lastUnasError: null,
   generatedAt: 0,
 };
 
@@ -83,16 +104,24 @@ export function replaceByPrefix(prefix: string, targets: TargetSummary[]): void 
 export function getSummary(): {
   targets: TargetSummary[];
   generatedAt: number;
-  errors: { proxmox: string | null };
+  errors: { proxmox: string | null; unas: string | null };
 } {
   return {
     targets: Array.from(snapshot.targets.values()),
     generatedAt: snapshot.generatedAt,
-    errors: { proxmox: snapshot.lastProxmoxError },
+    errors: {
+      proxmox: snapshot.lastProxmoxError,
+      unas: snapshot.lastUnasError,
+    },
   };
 }
 
 export function setProxmoxError(err: string | null): void {
   snapshot.lastProxmoxError = err;
+  snapshot.generatedAt = Date.now();
+}
+
+export function setUnasError(err: string | null): void {
+  snapshot.lastUnasError = err;
   snapshot.generatedAt = Date.now();
 }

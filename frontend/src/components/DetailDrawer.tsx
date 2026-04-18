@@ -49,6 +49,8 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
   if (!target) return null;
 
   const isHost = target.kind === 'proxmox-host';
+  const isUnas = target.kind === 'unas';
+  const hasStoragePools = isHost || isUnas;
   const hasNet =
     target.netInBps !== undefined && target.netOutBps !== undefined;
 
@@ -161,7 +163,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             />
           )}
 
-          {!isHost && series.disk_pct && series.disk_pct.length > 0 && (
+          {!isHost && !isUnas && series.disk_pct && series.disk_pct.length > 0 && (
             <HistoryChart
               title="Disk"
               hint="percent · 24h"
@@ -180,7 +182,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             />
           )}
 
-          {isHost &&
+          {hasStoragePools &&
             storagePoolSeries(target, series).map((chart) => (
               <HistoryChart
                 key={chart.key}
@@ -205,6 +207,12 @@ function computeMetricsForTarget(target: TargetSummary): string[] {
     base.push('disk_pct', 'net_in_bps', 'net_out_bps');
   }
   if (target.kind === 'proxmox-host') {
+    for (const pool of target.storages ?? []) {
+      base.push(`storage:${pool.name}:used_pct`);
+    }
+  }
+  if (target.kind === 'unas') {
+    base.push('rootfs_pct');
     for (const pool of target.storages ?? []) {
       base.push(`storage:${pool.name}:used_pct`);
     }
