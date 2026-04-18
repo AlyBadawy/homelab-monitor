@@ -54,6 +54,11 @@ export class UnasClient {
       port: this.cfg.port,
       username: this.cfg.user,
       readyTimeout: 8000,
+      // Enable keyboard-interactive auth as well as plain password —
+      // UniFi OS prompts via keyboard-interactive by default, and OpenSSH
+      // handles both transparently but ssh2 treats them as separate methods.
+      // See the conn.on('keyboard-interactive', ...) handler below.
+      tryKeyboard: true,
       // Only support the newer hashes — openssh defaults.
       algorithms: {
         serverHostKey: [
@@ -93,6 +98,17 @@ export class UnasClient {
         () => finish(new Error(`unas: batch timed out after ${this.cfg.execTimeoutMs}ms`)),
         this.cfg.execTimeoutMs,
       );
+
+      // UniFi OS asks for the password over keyboard-interactive. The
+       // handler is given a list of prompts; we reply with the password
+       // for each one (in practice there's just a "Password: " prompt).
+      conn.on('keyboard-interactive', (_name, _instructions, _lang, prompts, finish) => {
+        if (!this.cfg.password) {
+          finish([]);
+          return;
+        }
+        finish(prompts.map(() => this.cfg.password as string));
+      });
 
       conn.once('ready', async () => {
         try {
