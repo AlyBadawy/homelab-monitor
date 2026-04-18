@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.6.0
+    image: homelab-monitor-backend:0.6.1
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -33,17 +33,20 @@ services:
       PROXMOX_INSECURE_TLS: "${PROXMOX_INSECURE_TLS:-false}"
 
       # ----- UNAS (UniFi UNAS Pro, via SSH) -----
-      # Create a read-only key pair on the Docker host, drop the private key
-      # at ./secrets/unas_id_ed25519, and append the public key to the UNAS
-      # user's ~/.ssh/authorized_keys. Key auth is strongly preferred over
-      # password auth.
+      # Two auth paths:
+      #   1. Key auth (preferred): create a read-only key pair on the Docker
+      #      host, drop the private key at ./secrets/unas_id_ed25519, append
+      #      the public key to the UNAS user's ~/.ssh/authorized_keys, and
+      #      set UNAS_SSH_KEY_PATH=/secrets/unas_id_ed25519 in Portainer.
+      #   2. Password auth: leave UNAS_SSH_KEY_PATH unset and set
+      #      UNAS_PASSWORD in your Portainer stack env vars.
+      # If both are set, the key is used; the password is the fallback.
       UNAS_NAME: "${UNAS_NAME:-UNAS}"
       UNAS_HOST: "${UNAS_HOST:-172.20.20.2}"
       UNAS_PORT: "${UNAS_PORT:-22}"
       UNAS_USER: "${UNAS_USER:-root}"
-      UNAS_SSH_KEY_PATH: "${UNAS_SSH_KEY_PATH:-/secrets/unas_id_ed25519}"
+      UNAS_SSH_KEY_PATH: "${UNAS_SSH_KEY_PATH:-}"
       UNAS_SSH_KEY_PASSPHRASE: "${UNAS_SSH_KEY_PASSPHRASE:-}"
-      # Password fallback — discouraged. Leave empty if using a key.
       UNAS_PASSWORD: "${UNAS_PASSWORD:-}"
       UNAS_EXEC_TIMEOUT_MS: "${UNAS_EXEC_TIMEOUT_MS:-15000}"
     volumes:
@@ -62,7 +65,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.6.0
+    image: homelab-monitor-frontend:0.6.1
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

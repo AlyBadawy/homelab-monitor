@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { Client, type ConnectConfig } from 'ssh2';
 import type { UnasConfig } from '../config';
 
@@ -25,9 +25,25 @@ export class UnasClient {
 
   constructor(cfg: UnasConfig) {
     this.cfg = cfg;
-    this.privateKey = cfg.privateKeyPath
-      ? readFileSync(cfg.privateKeyPath)
-      : null;
+    // Read the key lazily-ish: only if the path was supplied AND the file
+    // actually exists. When the user is doing password auth, the compose
+    // default still seeds UNAS_SSH_KEY_PATH, so "exists" is the deciding
+    // factor. A bare password + missing key file falls back cleanly to
+    // password auth below.
+    if (cfg.privateKeyPath && existsSync(cfg.privateKeyPath)) {
+      this.privateKey = readFileSync(cfg.privateKeyPath);
+    } else {
+      this.privateKey = null;
+      if (cfg.privateKeyPath && !cfg.password) {
+        // Neither a reachable key nor a password — we'll fail at connect
+        // time with a clearer message, rather than at boot.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[homelab-monitor] unas: key path '${cfg.privateKeyPath}' not found ` +
+            `and no UNAS_PASSWORD set — connections will fail until fixed`,
+        );
+      }
+    }
   }
 
   /** Connect, run a batch of commands sequentially, disconnect. */
