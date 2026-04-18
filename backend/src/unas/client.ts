@@ -54,11 +54,6 @@ export class UnasClient {
       port: this.cfg.port,
       username: this.cfg.user,
       readyTimeout: 8000,
-      // Enable keyboard-interactive auth as well as plain password —
-      // UniFi OS prompts via keyboard-interactive by default, and OpenSSH
-      // handles both transparently but ssh2 treats them as separate methods.
-      // See the conn.on('keyboard-interactive', ...) handler below.
-      tryKeyboard: true,
       // Only support the newer hashes — openssh defaults.
       algorithms: {
         serverHostKey: [
@@ -73,10 +68,20 @@ export class UnasClient {
     };
 
     if (this.privateKey) {
+      // Key auth path — stays as-is. ssh2 tries publickey method with the key.
       connectCfg.privateKey = this.privateKey;
       if (this.cfg.passphrase) connectCfg.passphrase = this.cfg.passphrase;
     } else if (this.cfg.password) {
-      connectCfg.password = this.cfg.password;
+      // UniFi OS advertises only { publickey, keyboard-interactive } — no
+      // plain 'password' method. If we leave `password` set on the config,
+      // ssh2 tries the password method first, the server rejects the method
+      // outright, and ssh2 then errors with "All configured authentication
+      // methods failed" instead of falling through to keyboard-interactive.
+      //
+      // Fix: explicitly tell ssh2 to try ONLY keyboard-interactive, and
+      // supply the password via the keyboard-interactive event handler.
+      connectCfg.tryKeyboard = true;
+      connectCfg.authHandler = ['keyboard-interactive'];
     } else {
       throw new Error('unas: no SSH credentials configured (need key or password)');
     }
