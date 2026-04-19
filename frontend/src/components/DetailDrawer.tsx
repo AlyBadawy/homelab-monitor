@@ -4,7 +4,7 @@ import type { TargetSummary } from '../lib/api';
 import { useHistory } from '../lib/useHistory';
 import { HistoryChart, type HistoryChartSeries } from './HistoryChart';
 import { StatusPill } from './StatusPill';
-import { fmtRate, fmtUptime } from '../lib/format';
+import { fmtBytes, fmtRate, fmtUptime } from '../lib/format';
 
 interface DetailDrawerProps {
   target: TargetSummary | null;
@@ -51,9 +51,14 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
   const isHost = target.kind === 'proxmox-host';
   const isUnas = target.kind === 'unas';
   const isService = target.kind === 'service';
+  const isNextcloud = target.kind === 'nextcloud';
   const hasStoragePools = isHost || isUnas;
+  // Nextcloud tiles report null for net rates, so suppress the net chart
+  // even though the fields technically exist as undefined on the payload.
   const hasNet =
-    target.netInBps !== undefined && target.netOutBps !== undefined;
+    !isNextcloud &&
+    target.netInBps !== undefined &&
+    target.netOutBps !== undefined;
 
   return (
     <div
@@ -124,7 +129,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             </div>
           )}
 
-          {!isService && (
+          {!isService && !isNextcloud && (
             <>
               <HistoryChart
                 title="CPU"
@@ -156,6 +161,70 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
                     stroke: '#34d399',
                     fill: 'rgba(52, 211, 153, 0.10)',
                     format: (v) => `${v.toFixed(1)}%`,
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {isNextcloud && (
+            <>
+              <HistoryChart
+                title="Active Users"
+                hint="registered users · 24h"
+                baselineZero
+                series={[
+                  {
+                    key: 'active_users_5m',
+                    label: 'Last 5m',
+                    points: series.active_users_5m ?? [],
+                    stroke: '#22d3ee',
+                    fill: 'rgba(34, 211, 238, 0.10)',
+                    format: (v) => String(Math.round(v)),
+                  },
+                  {
+                    key: 'active_users_1h',
+                    label: 'Last 1h',
+                    points: series.active_users_1h ?? [],
+                    stroke: '#34d399',
+                    format: (v) => String(Math.round(v)),
+                  },
+                  {
+                    key: 'active_users_24h',
+                    label: 'Last 24h',
+                    points: series.active_users_24h ?? [],
+                    stroke: '#a78bfa',
+                    format: (v) => String(Math.round(v)),
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Storage Free"
+                hint="bytes · 24h"
+                baselineZero={false}
+                series={[
+                  {
+                    key: 'storage_free_bytes',
+                    label: 'Free',
+                    points: series.storage_free_bytes ?? [],
+                    stroke: '#22d3ee',
+                    fill: 'rgba(34, 211, 238, 0.10)',
+                    format: (v) => fmtBytes(v),
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Files"
+                hint="total files · 24h"
+                baselineZero={false}
+                series={[
+                  {
+                    key: 'files_count',
+                    label: 'Files',
+                    points: series.files_count ?? [],
+                    stroke: '#f59e0b',
+                    fill: 'rgba(245, 158, 11, 0.10)',
+                    format: (v) => Math.round(v).toLocaleString(),
                   },
                 ]}
               />
@@ -270,6 +339,16 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
 function computeMetricsForTarget(target: TargetSummary): string[] {
   if (target.kind === 'service') {
     return ['http_latency_ms', 'http_up'];
+  }
+  if (target.kind === 'nextcloud') {
+    // NC records domain metrics only — no CPU/mem samples exist.
+    return [
+      'active_users_5m',
+      'active_users_1h',
+      'active_users_24h',
+      'storage_free_bytes',
+      'files_count',
+    ];
   }
   const base = ['cpu_pct', 'mem_pct'];
   if (target.kind === 'vm' || target.kind === 'container') {

@@ -46,6 +46,24 @@ export interface PortainerConfig {
   dfIntervalMs: number;
 }
 
+export interface NextcloudConfig {
+  enabled: boolean;
+  /** Base URL of the Nextcloud instance (no trailing slash). */
+  baseUrl: string;
+  /**
+   * Read-only monitoring token from Settings → Administration → Monitoring.
+   * Sent as the `NC-Token` header; no user account is required.
+   */
+  token: string;
+  /** Skip TLS verify when NC sits behind a self-signed cert. */
+  insecureTls: boolean;
+  /**
+   * Poll interval (ms). Server-info numbers don't move meaningfully faster
+   * than once a minute, so we default to 60s to stay light on the upstream.
+   */
+  pollIntervalMs: number;
+}
+
 export interface AppConfig {
   port: number;
   dataDir: string;
@@ -54,6 +72,7 @@ export interface AppConfig {
   proxmox: ProxmoxConfig;
   unas: UnasConfig;
   portainer: PortainerConfig;
+  nextcloud: NextcloudConfig;
 }
 
 function envBool(name: string, def = false): boolean {
@@ -85,6 +104,10 @@ export function loadConfig(): AppConfig {
   const portainerBase = (process.env.PORTAINER_BASE_URL ?? '').replace(/\/+$/, '');
   const portainerKey = (process.env.PORTAINER_API_KEY ?? '').trim();
   const portainerEnabled = Boolean(portainerBase && portainerKey);
+
+  const ncBase = (process.env.NEXTCLOUD_BASE_URL ?? '').replace(/\/+$/, '');
+  const ncToken = (process.env.NEXTCLOUD_TOKEN ?? '').trim();
+  const nextcloudEnabled = Boolean(ncBase && ncToken);
 
   const appPoll = envInt('POLL_INTERVAL_MS', 10_000);
 
@@ -119,6 +142,13 @@ export function loadConfig(): AppConfig {
       pollIntervalMs: envInt('PORTAINER_POLL_INTERVAL_MS', appPoll),
       dfIntervalMs: envInt('PORTAINER_DF_INTERVAL_MS', 60_000),
     },
+    nextcloud: {
+      enabled: nextcloudEnabled,
+      baseUrl: ncBase,
+      token: ncToken,
+      insecureTls: envBool('NEXTCLOUD_INSECURE_TLS', false),
+      pollIntervalMs: envInt('NEXTCLOUD_POLL_INTERVAL_MS', 60_000),
+    },
   };
 
   // eslint-disable-next-line no-console
@@ -127,7 +157,8 @@ export function loadConfig(): AppConfig {
       `proxmox=${cfg.proxmox.enabled ? cfg.proxmox.baseUrl : 'disabled'} ` +
       `insecureTls=${cfg.proxmox.insecureTls} ` +
       `unas=${cfg.unas.enabled ? `${cfg.unas.user}@${cfg.unas.host}:${cfg.unas.port}` : 'disabled'} ` +
-      `portainer=${cfg.portainer.enabled ? cfg.portainer.baseUrl : 'disabled'}`,
+      `portainer=${cfg.portainer.enabled ? cfg.portainer.baseUrl : 'disabled'} ` +
+      `nextcloud=${cfg.nextcloud.enabled ? cfg.nextcloud.baseUrl : 'disabled'}`,
   );
 
   return cfg;

@@ -8,6 +8,7 @@ import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
 import { NetworksCard } from "./components/NetworksCard";
 import { VolumesCard } from "./components/VolumesCard";
+import { NextcloudCard } from "./components/NextcloudCard";
 import {
   fetchSummary,
   type DockerEndpointResources,
@@ -28,6 +29,7 @@ export default function App() {
     proxmox: null,
     unas: null,
     portainer: null,
+    nextcloud: null,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -68,14 +70,18 @@ export default function App() {
   //   Infrastructure row  = Proxmox host(s) + UNAS/storage devices.
   //   VMs row             = VMs + LXCs (max 3 per row, fills full width).
   //   Databases row       = DB targets (same rules as VMs).
+  //   Applications row    = Nextcloud / Immich / other first-class apps that
+  //                         each have their own bespoke card (not the
+  //                         generic TargetCard). Same max-3-per-row rules.
   //   dockerStackGroups   = ordered groups of Docker containers keyed by
   //                         their compose/swarm stack label — each rendered
   //                         as its own Section. "Unstacked" comes last.
   // Services are rendered separately via <ServicesCard>.
-  const { infra, vms, databases, dockerStackGroups } = useMemo(() => {
+  const { infra, vms, databases, applications, dockerStackGroups } = useMemo(() => {
     const infra: TargetSummary[] = [];
     const vms: TargetSummary[] = [];
     const databases: TargetSummary[] = [];
+    const applications: TargetSummary[] = [];
     const dockers: TargetSummary[] = [];
     for (const t of targets) {
       if (t.kind === "proxmox-host" || t.kind === "unas" || t.kind === "storage") {
@@ -86,6 +92,8 @@ export default function App() {
         dockers.push(t);
       } else if (t.kind === "database") {
         databases.push(t);
+      } else if (t.kind === "nextcloud" || t.kind === "immich") {
+        applications.push(t);
       }
       // `service` kind is intentionally omitted — ServicesCard owns it.
     }
@@ -111,7 +119,11 @@ export default function App() {
         if (b.key === UNSTACKED_KEY) return -1;
         return a.key.localeCompare(b.key);
       });
-    return { infra, vms, databases, dockerStackGroups };
+    // Applications are sorted by name for a stable order. They're first-class
+    // apps (Nextcloud, Immich) that each have their own card, so we don't do
+    // the online-first trick used for dockers.
+    applications.sort((a, b) => a.name.localeCompare(b.name));
+    return { infra, vms, databases, applications, dockerStackGroups };
   }, [targets]);
 
   const onSelect = (t: TargetSummary) => setSelectedId(t.id);
@@ -169,6 +181,18 @@ export default function App() {
             </div>
             <p className="mt-2 font-mono text-sm text-text-muted break-all">
               {apiErrors.portainer}
+            </p>
+          </div>
+        )}
+
+        {apiErrors.nextcloud && (
+          <div className="card border-accent-amber/40 bg-accent-amber/5">
+            <div className="flex items-center gap-2 card-title text-accent-amber">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Nextcloud poller error
+            </div>
+            <p className="mt-2 font-mono text-sm text-text-muted break-all">
+              {apiErrors.nextcloud}
             </p>
           </div>
         )}
@@ -271,7 +295,29 @@ export default function App() {
           </Section>
         )}
 
-        {/* 5) Databases — same rules as VMs. */}
+        {/* 5) Applications — first-class self-hosted apps (Nextcloud,
+            Immich, …). Each kind gets its own bespoke card instead of the
+            generic TargetCard because the metrics that matter are
+            domain-specific (e.g. active users, file count, storage free). */}
+        {applications.length > 0 && (
+          <Section title="Applications">
+            <CardRow
+              items={applications}
+              maxPerRow={3}
+              keyFor={(t) => t.id}
+              renderItem={(t) => {
+                if (t.kind === "nextcloud") {
+                  return <NextcloudCard target={t} onSelect={onSelect} />;
+                }
+                // Future kinds (immich, etc.) fall back to the generic card
+                // until we ship a bespoke one for them.
+                return <TargetCard target={t} onSelect={onSelect} />;
+              }}
+            />
+          </Section>
+        )}
+
+        {/* 6) Databases — same rules as VMs. */}
         {databases.length > 0 && (
           <Section title="Databases">
             <CardRow
@@ -311,7 +357,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.10.0 · docker stacks · networks · volumes
+          v0.11.0 · nextcloud serverinfo
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

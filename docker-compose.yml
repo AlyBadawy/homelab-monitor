@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.10.0
+    image: homelab-monitor-backend:0.11.0
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -69,6 +69,21 @@ services:
       # volumes list; defaults to 60000 (60s). Raise this further on hosts
       # with many large volumes if you see sustained load.
       PORTAINER_DF_INTERVAL_MS: "${PORTAINER_DF_INTERVAL_MS:-60000}"
+
+      # ----- Nextcloud (serverinfo monitoring API) -----
+      # Enable by setting BASE_URL + TOKEN. Mint the token in:
+      #   Settings → Administration → Monitoring → "Metrics token"
+      # The token is purpose-built for this API — no user login needed.
+      # The monitor reads only; setting this grants read-only visibility
+      # into active-users, file counts, free storage, apps with updates,
+      # and share counts for the Nextcloud Applications tile.
+      NEXTCLOUD_BASE_URL: "${NEXTCLOUD_BASE_URL:-}"
+      NEXTCLOUD_TOKEN: "${NEXTCLOUD_TOKEN:-}"
+      # Flip to "true" if NC serves a self-signed cert.
+      NEXTCLOUD_INSECURE_TLS: "${NEXTCLOUD_INSECURE_TLS:-false}"
+      # Defaults to 60s. Raise on shared hosts — the serverinfo call walks
+      # the installed-apps list which can be slow on large instances.
+      NEXTCLOUD_POLL_INTERVAL_MS: "${NEXTCLOUD_POLL_INTERVAL_MS:-60000}"
     volumes:
       - backend_data:/data
       # Read-only mount for the UNAS SSH private key. Create ./secrets on the
@@ -85,7 +100,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.10.0
+    image: homelab-monitor-frontend:0.11.0
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

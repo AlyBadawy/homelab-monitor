@@ -11,7 +11,9 @@ export type TargetKind =
   | 'database'
   | 'storage'
   | 'unas'
-  | 'service';
+  | 'service'
+  | 'nextcloud'        // Nextcloud instance (serverinfo API)
+  | 'immich';          // Immich instance — added in v0.12.
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -66,6 +68,30 @@ export interface UnasDrive {
   smartErrorBits: number | null;
 }
 
+/**
+ * Nextcloud-specific detail payload — only populated on kind='nextcloud'.
+ * Every number may be null if the upstream serverinfo response omitted it
+ * (e.g. `freespace` can be missing on platforms that don't report disk).
+ */
+export interface NextcloudDetails {
+  /** NC version string like "30.0.2.0". */
+  version: string | null;
+  /** Active-user counts from `activeUsers.*` (registered users seen recently). */
+  activeUsers5m: number | null;
+  activeUsers1h: number | null;
+  activeUsers24h: number | null;
+  /** Total registered users (enabled + disabled). */
+  totalUsers: number | null;
+  /** File count aggregated across all user homes. */
+  filesCount: number | null;
+  /** Free bytes on the data partition. Null when NC doesn't report it. */
+  storageFreeBytes: number | null;
+  /** Count of active outbound shares across all types. */
+  sharesCount: number | null;
+  /** Number of installed NC apps with an update available. */
+  appsWithUpdates: number | null;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -96,6 +122,8 @@ export interface TargetSummary {
    * on kind='docker-container'.
    */
   stack?: string | null;
+  /** Nextcloud rich details — only populated on kind='nextcloud'. */
+  nextcloud?: NextcloudDetails;
   updatedAt: number;
   error?: string;               // present when the last poll failed
 }
@@ -150,6 +178,7 @@ interface Snapshot {
   lastProxmoxError: string | null;
   lastUnasError: string | null;
   lastPortainerError: string | null;
+  lastNextcloudError: string | null;
   generatedAt: number;
 }
 
@@ -159,6 +188,7 @@ const snapshot: Snapshot = {
   lastProxmoxError: null,
   lastUnasError: null,
   lastPortainerError: null,
+  lastNextcloudError: null,
   generatedAt: 0,
 };
 
@@ -181,6 +211,7 @@ export function getSummary(): {
     proxmox: string | null;
     unas: string | null;
     portainer: string | null;
+    nextcloud: string | null;
   };
 } {
   return {
@@ -191,6 +222,7 @@ export function getSummary(): {
       proxmox: snapshot.lastProxmoxError,
       unas: snapshot.lastUnasError,
       portainer: snapshot.lastPortainerError,
+      nextcloud: snapshot.lastNextcloudError,
     },
   };
 }
@@ -216,5 +248,10 @@ export function setUnasError(err: string | null): void {
 
 export function setPortainerError(err: string | null): void {
   snapshot.lastPortainerError = err;
+  snapshot.generatedAt = Date.now();
+}
+
+export function setNextcloudError(err: string | null): void {
+  snapshot.lastNextcloudError = err;
   snapshot.generatedAt = Date.now();
 }

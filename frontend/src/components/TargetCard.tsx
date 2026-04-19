@@ -13,6 +13,8 @@ import {
   Thermometer,
   Globe,
   Gauge,
+  Cloud,
+  Image as ImageIcon,
   Expand,
   type LucideIcon,
 } from 'lucide-react';
@@ -35,6 +37,8 @@ const KIND_ICON: Record<TargetKind, LucideIcon> = {
   storage: HardDrive,
   unas: HardDriveDownload,
   service: Globe,
+  nextcloud: Cloud,
+  immich: ImageIcon,
 };
 
 const KIND_LABEL: Record<TargetKind, string> = {
@@ -46,6 +50,8 @@ const KIND_LABEL: Record<TargetKind, string> = {
   storage: 'STORAGE',
   unas: 'UNAS',
   service: 'SERVICE',
+  nextcloud: 'NEXTCLOUD',
+  immich: 'IMMICH',
 };
 
 interface TargetCardProps {

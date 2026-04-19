@@ -8,6 +8,7 @@ import servicesRouter from './routes/services';
 import { ProxmoxPoller } from './proxmox/poller';
 import { UnasPoller } from './unas/poller';
 import { PortainerPoller } from './portainer/poller';
+import { NextcloudPoller } from './nextcloud/poller';
 import { ServiceHealthPoller } from './services/poller';
 import { listChecks } from './services/repo';
 
@@ -28,6 +29,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
     proxmox: cfg.proxmox.enabled ? 'enabled' : 'disabled',
     unas: cfg.unas.enabled ? 'enabled' : 'disabled',
     portainer: cfg.portainer.enabled ? 'enabled' : 'disabled',
+    nextcloud: cfg.nextcloud.enabled ? 'enabled' : 'disabled',
   });
 });
 
@@ -74,6 +76,19 @@ if (cfg.portainer.enabled) {
   );
 }
 
+let nextcloudPoller: NextcloudPoller | null = null;
+if (cfg.nextcloud.enabled) {
+  nextcloudPoller = new NextcloudPoller(cfg);
+  nextcloudPoller.start();
+  // eslint-disable-next-line no-console
+  console.log('[homelab-monitor] nextcloud poller started');
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[homelab-monitor] nextcloud disabled (missing NEXTCLOUD_BASE_URL/NEXTCLOUD_TOKEN)',
+  );
+}
+
 // Service health poller always runs; if the DB has no checks, it no-ops.
 const serviceHealthPoller = new ServiceHealthPoller(cfg);
 serviceHealthPoller.start();
@@ -93,6 +108,7 @@ function shutdown(signal: string): void {
   proxmoxPoller?.stop();
   unasPoller?.stop();
   portainerPoller?.stop();
+  nextcloudPoller?.stop();
   serviceHealthPoller.stop();
   server.close(() => {
     closeDb();

@@ -11,7 +11,9 @@ export type TargetKind =
   | 'database'
   | 'storage'
   | 'unas'
-  | 'service';
+  | 'service'
+  | 'nextcloud'
+  | 'immich';
 
 export type TargetStatus = 'online' | 'offline' | 'unknown';
 
@@ -52,6 +54,22 @@ export interface UnasDrive {
   smartErrorBits: number | null;
 }
 
+/**
+ * Nextcloud rich details — only populated on kind='nextcloud'.
+ * Every number may be null if the upstream serverinfo response omitted it.
+ */
+export interface NextcloudDetails {
+  version: string | null;
+  activeUsers5m: number | null;
+  activeUsers1h: number | null;
+  activeUsers24h: number | null;
+  totalUsers: number | null;
+  filesCount: number | null;
+  storageFreeBytes: number | null;
+  sharesCount: number | null;
+  appsWithUpdates: number | null;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -79,6 +97,8 @@ export interface TargetSummary {
    * null for containers started with plain `docker run`.
    */
   stack?: string | null;
+  /** Nextcloud rich details — only populated on kind='nextcloud'. */
+  nextcloud?: NextcloudDetails;
   updatedAt: number;
   error?: string;
 }
@@ -87,6 +107,7 @@ export interface SummaryErrors {
   proxmox: string | null;
   unas: string | null;
   portainer: string | null;
+  nextcloud: string | null;
 }
 
 /* ---- Docker resources (networks, volumes) ----------------------------- */
@@ -150,6 +171,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
   proxmox: 'enabled' | 'disabled';
   unas: 'enabled' | 'disabled';
   portainer: 'enabled' | 'disabled';
+  nextcloud: 'enabled' | 'disabled';
 }> {
   const r = await fetch('/api/health', { signal });
   if (!r.ok) throw new Error(`health failed: ${r.status}`);
@@ -159,6 +181,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
     proxmox: 'enabled' | 'disabled';
     unas: 'enabled' | 'disabled';
     portainer: 'enabled' | 'disabled';
+    nextcloud: 'enabled' | 'disabled';
   };
 }
 
