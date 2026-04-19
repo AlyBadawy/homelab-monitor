@@ -207,6 +207,28 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             />
           )}
 
+          {/* Host CPU temperature — only present on proxmox-host and unas.
+              We don't gate this on `length > 0` so the chart always appears
+              on those kinds; HistoryChart renders its own "collecting…"
+              placeholder when there are <2 samples yet. */}
+          {(isHost || isUnas) && (
+            <HistoryChart
+              title="CPU Temperature"
+              hint="°C · 24h"
+              baselineZero={false}
+              series={[
+                {
+                  key: 'cpu_temp_c',
+                  label: 'CPU Temp',
+                  points: series.cpu_temp_c ?? [],
+                  stroke: '#f97316',
+                  fill: 'rgba(249, 115, 22, 0.10)',
+                  format: (v) => `${v.toFixed(0)}°C`,
+                },
+              ]}
+            />
+          )}
+
           {!isHost && !isUnas && series.disk_pct && series.disk_pct.length > 0 && (
             <HistoryChart
               title="Disk"
@@ -254,12 +276,13 @@ function computeMetricsForTarget(target: TargetSummary): string[] {
     base.push('disk_pct', 'net_in_bps', 'net_out_bps');
   }
   if (target.kind === 'proxmox-host') {
+    base.push('cpu_temp_c');
     for (const pool of target.storages ?? []) {
       base.push(`storage:${pool.name}:used_pct`);
     }
   }
   if (target.kind === 'unas') {
-    base.push('rootfs_pct');
+    base.push('rootfs_pct', 'cpu_temp_c');
     for (const pool of target.storages ?? []) {
       base.push(`storage:${pool.name}:used_pct`);
     }

@@ -69,8 +69,15 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
     if (showMiniStats) {
       m.push('net_in_bps', 'net_out_bps');
     }
+    // Host-style cards (Proxmox/UNAS) also plot a 24h CPU temp sparkline
+    // inside the CPU Temp MiniStat. Drivers of this extra history request:
+    //   - UNAS:      cpu_temp_c recorded from /sys/class/thermal/*
+    //   - Proxmox:   cpu_temp_c recorded from PVE's thermalstate field
+    if (isHost || isUnas) {
+      m.push('cpu_temp_c');
+    }
     return m;
-  }, [showMiniStats, isService]);
+  }, [showMiniStats, isService, isHost, isUnas]);
 
   const { series } = useHistory(target.id, metrics, {
     points: 120,       // sparkline-sized
@@ -81,6 +88,7 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
   const memPoints = series.mem_pct ?? [];
   const netInPoints = series.net_in_bps ?? [];
   const netOutPoints = series.net_out_bps ?? [];
+  const cpuTempPoints = series.cpu_temp_c ?? [];
 
   // Shared y-domain for the combined net sparkline so in/out are comparable.
   const netDomain = useMemo<[number, number] | undefined>(() => {
@@ -273,6 +281,42 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
         </div>
       )}
 
+      {(isHost || isUnas) && (
+        <div className="mt-4 pt-3 border-t border-border">
+          <div className="grid grid-cols-2 gap-2">
+            <MiniStat
+              icon={Thermometer}
+              label="CPU Temp"
+              value={
+                target.cpuTempC === null || target.cpuTempC === undefined
+                  ? '—'
+                  : `${target.cpuTempC.toFixed(0)}°C`
+              }
+              tone={
+                target.cpuTempC && target.cpuTempC >= 75
+                  ? 'rose'
+                  : target.cpuTempC && target.cpuTempC >= 65
+                    ? 'amber'
+                    : 'muted'
+              }
+              title={
+                isUnas
+                  ? 'Max temperature across thermal zones'
+                  : 'Max CPU-package/core temperature from PVE sensors'
+              }
+              sparklinePoints={cpuTempPoints}
+              sparklineAriaLabel="CPU temperature 24h trend"
+            />
+            <MiniStat
+              icon={Clock}
+              label="Uptime"
+              value={fmtUptime(target.uptimeSec)}
+              tone="muted"
+            />
+          </div>
+        </div>
+      )}
+
       {isHost && (
         <div className="mt-4 pt-3 border-t border-border">
           <div className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
@@ -284,33 +328,6 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
 
       {isUnas && (
         <>
-          <div className="mt-4 pt-3 border-t border-border">
-            <div className="grid grid-cols-2 gap-2">
-              <MiniStat
-                icon={Thermometer}
-                label="CPU Temp"
-                value={
-                  target.cpuTempC === null || target.cpuTempC === undefined
-                    ? '—'
-                    : `${target.cpuTempC.toFixed(0)}°C`
-                }
-                tone={
-                  target.cpuTempC && target.cpuTempC >= 75
-                    ? 'rose'
-                    : target.cpuTempC && target.cpuTempC >= 65
-                      ? 'amber'
-                      : 'muted'
-                }
-                title="Max temperature across thermal zones"
-              />
-              <MiniStat
-                icon={Clock}
-                label="Uptime"
-                value={fmtUptime(target.uptimeSec)}
-                tone="muted"
-              />
-            </div>
-          </div>
           <div className="mt-4 pt-3 border-t border-border">
             <div className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
               Storage Pools

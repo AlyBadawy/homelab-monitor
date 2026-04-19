@@ -21,6 +21,13 @@ export interface PveNodeStatus {
   rootfs: { used: number; total: number };
   uptime: number;
   loadavg?: string[];
+  /**
+   * `sensors -j` output serialized as a JSON *string*. Present on PVE 8+/9
+   * when lm-sensors is installed on the host. Absent when the package is
+   * missing, so we treat it as optional and fall back to cpuTempC = null.
+   */
+  'thermal-state'?: string;
+  thermalstate?: string;  // some PVE builds use this spelling instead
 }
 
 export interface PveClusterResourceVm {

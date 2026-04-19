@@ -8,6 +8,7 @@ import {
   type TargetSummary,
 } from '../state';
 import { ProxmoxClient } from './client';
+import { parseThermalState } from './parsers';
 import type { PveBackupEntry } from './types';
 
 /**
@@ -188,6 +189,14 @@ export class ProxmoxPoller {
         const memPct = (status.memory.used / status.memory.total) * 100;
         const diskPct = (status.rootfs.used / status.rootfs.total) * 100;
 
+        // PVE's /nodes/{n}/status optionally includes `sensors -j` output as
+        // a JSON string when lm-sensors is installed on the host. Field name
+        // varies by PVE build (`thermalstate` vs `thermal-state`), so we try
+        // both. Absent → cpuTempC stays null and the UI shows "—".
+        const cpuTempC = parseThermalState(
+          status.thermalstate ?? status['thermal-state'],
+        );
+
         const id = i === 0 ? 'proxmox-host' : `proxmox-host-${n.node}`;
         hostTargets.push({
           id,
@@ -198,6 +207,7 @@ export class ProxmoxPoller {
           memPct,
           diskPct,
           uptimeSec: status.uptime,
+          cpuTempC,
           storages: pools,
           updatedAt: now,
         });
@@ -205,6 +215,7 @@ export class ProxmoxPoller {
         recordSample(id, 'cpu_pct', cpuPct, now);
         recordSample(id, 'mem_pct', memPct, now);
         recordSample(id, 'rootfs_pct', diskPct, now);
+        if (cpuTempC != null) recordSample(id, 'cpu_temp_c', cpuTempC, now);
         for (const p of pools) {
           if (p.usedPct != null) {
             recordSample(id, `storage:${p.name}:used_pct`, p.usedPct, now);

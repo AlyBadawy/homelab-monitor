@@ -203,6 +203,7 @@ export class UnasPoller {
     if (cpuPct != null) recordSample('unas', 'cpu_pct', cpuPct, now);
     if (mem.usedPct != null) recordSample('unas', 'mem_pct', mem.usedPct, now);
     if (diskPct != null) recordSample('unas', 'rootfs_pct', diskPct, now);
+    if (cpuTempC != null) recordSample('unas', 'cpu_temp_c', cpuTempC, now);
     for (const p of pools) {
       if (p.usedPct != null) {
         recordSample('unas', `storage:${p.name}:used_pct`, p.usedPct, now);
