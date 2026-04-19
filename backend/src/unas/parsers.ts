@@ -211,27 +211,53 @@ export function parseSmartctl(device: string, stdout: string, rc: number | null)
   }
 
   // Temperature — prefer NVMe "Temperature:" line, fall back to ATA attr 194.
+  //
+  // ATA layout (smartctl -a):
+  //   ID# ATTRIBUTE_NAME        FLAG   VALUE WORST THRESH TYPE     UPDATED  WHEN_FAILED RAW_VALUE
+  //   194 Temperature_Celsius   0x0022  066   055   000    Old_age  Always       -        34
+  //
+  // The old regex was lazy and captured the *VALUE* column (066) — which on
+  // Crucial and many other SSDs is a normalized "health" score (roughly
+  // 100 - temp), not the actual temperature. We now anchor to end-of-line
+  // to grab RAW_VALUE, tolerating the optional "(Min/Max 20/40)" suffix
+  // that some drives append.
+  const RAW_VALUE_TAIL = String.raw`.*?\s(\d+)(?:\s+\([^)]*\))?\s*$`;
   const nvmeTemp = stdout.match(/^Temperature:\s*(\d+)\s*Celsius/mi);
   if (nvmeTemp) {
     info.temperatureC = Number(nvmeTemp[1]);
   } else {
-    const ataTemp = stdout.match(/^\s*194\s+Temperature_Celsius.*?\s(\d+)(?:\s|$)/m);
+    const ataTemp = stdout.match(new RegExp(`^\\s*194\\s+Temperature_Celsius${RAW_VALUE_TAIL}`, 'm'));
     if (ataTemp) info.temperatureC = Number(ataTemp[1]);
     else {
-      const altTemp = stdout.match(/^\s*190\s+Airflow_Temperature_Cel.*?\s(\d+)(?:\s|$)/m);
+      const altTemp = stdout.match(new RegExp(`^\\s*190\\s+Airflow_Temperature_Cel${RAW_VALUE_TAIL}`, 'm'));
       if (altTemp) info.temperatureC = Number(altTemp[1]);
     }
   }
 
-  // Power On Hours — NVMe reports directly, ATA uses attribute 9.
+  // Sanity guard: any real drive sensor reads between 0°C and 100°C. A
+  // value outside that range almost certainly means we landed on a SMART
+  // column other than RAW_VALUE (e.g. a normalized health score) — drop it
+  // rather than display garbage. Belt-and-suspenders for the class of bug
+  // above, so a future vendor variation can't re-introduce the same issue.
+  if (info.temperatureC !== null && (info.temperatureC < 0 || info.temperatureC > 100)) {
+    info.temperatureC = null;
+  }
+
+  // Power On Hours — NVMe reports directly, ATA uses attribute 9. Same tail
+  // anchor trick: RAW_VALUE is the last integer on the line, optionally
+  // followed by "(Avg: 1200)" or similar on some drives.
   const nvmePoh = stdout.match(/^Power On Hours:\s*([\d,]+)/mi);
   if (nvmePoh) {
     info.powerOnHours = Number(nvmePoh[1].replace(/,/g, ''));
   } else {
-    // ATA attr 9 line; raw value is the last column. Grab the first number
-    // in the "RAW_VALUE" tail (handles "1234" and "1234 (Avg: 1200)" forms).
-    const ataPoh = stdout.match(/^\s*9\s+Power_On_Hours.*?(\d+)(?:\s|\(|$)/m);
+    const ataPoh = stdout.match(new RegExp(`^\\s*9\\s+Power_On_Hours${RAW_VALUE_TAIL}`, 'm'));
     if (ataPoh) info.powerOnHours = Number(ataPoh[1]);
+  }
+
+  // Sanity guard: cap PoH at ~1,000,000 hours (~114 years). Anything above
+  // that is a parse error, not a drive.
+  if (info.powerOnHours !== null && (info.powerOnHours < 0 || info.powerOnHours > 1_000_000)) {
+    info.powerOnHours = null;
   }
 
   return info;

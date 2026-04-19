@@ -321,7 +321,7 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
             <div className="mb-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-dim">
               Drives
             </div>
-            <DrivesTable drives={target.drives ?? []} />
+            <DrivesTable targetId={target.id} drives={target.drives ?? []} />
           </div>
         </>
       )}
