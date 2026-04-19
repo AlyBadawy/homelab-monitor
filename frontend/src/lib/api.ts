@@ -74,6 +74,11 @@ export interface TargetSummary {
   url?: string;
   httpStatusCode?: number | null;
   latencyMs?: number | null;
+  /**
+   * Docker compose/swarm stack name. Only populated on kind='docker-container';
+   * null for containers started with plain `docker run`.
+   */
+  stack?: string | null;
   updatedAt: number;
   error?: string;
 }
@@ -84,8 +89,49 @@ export interface SummaryErrors {
   portainer: string | null;
 }
 
+/* ---- Docker resources (networks, volumes) ----------------------------- */
+
+export interface DockerNetworkSummary {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  /** True for docker's default networks (bridge, host, none). */
+  builtIn: boolean;
+  internal: boolean;
+  attachable: boolean;
+  subnet: string | null;
+  gateway: string | null;
+  /** Running containers currently attached. */
+  attachedCount: number;
+}
+
+export interface DockerVolumeSummary {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  /** Stack label from com.docker.compose.project, if any. */
+  stack: string | null;
+  /** Bytes used on disk. Null when /system/df hasn't populated yet or driver reports -1. */
+  sizeBytes: number | null;
+  /** Running containers referencing this volume. */
+  refCount: number | null;
+  createdAt: string | null;
+}
+
+export interface DockerEndpointResources {
+  endpointId: number;
+  endpointName: string;
+  networks: DockerNetworkSummary[];
+  volumes: DockerVolumeSummary[];
+  /** Unix ms when the size numbers were last updated. 0 if never. */
+  sizesUpdatedAt: number;
+  dfError?: string;
+}
+
 export interface SummaryResponse {
   targets: TargetSummary[];
+  dockerResources: DockerEndpointResources[];
   generatedAt: number;
   errors: SummaryErrors;
 }

@@ -97,4 +97,67 @@ export interface DockerContainerInspect {
     Labels?: Record<string, string>;
     Image?: string;
   };
+  /** Per-network attachment metadata. Keys are the docker network *names*. */
+  NetworkSettings?: {
+    Networks?: Record<string, { NetworkID?: string }>;
+  };
+}
+
+/* ------------------ Docker resources (networks, volumes) ------------------ */
+
+/**
+ * Output of `/networks` on the Docker engine. We care about a handful of
+ * fields — docker returns many more. Attached container count is NOT in the
+ * list response; we compute it ourselves by walking containers' network
+ * attachments.
+ */
+export interface DockerNetwork {
+  Id: string;
+  Name: string;
+  Driver: string;
+  Scope: string;          // 'local' | 'global' | 'swarm'
+  Internal?: boolean;
+  Attachable?: boolean;
+  IPAM?: {
+    Driver?: string;
+    Config?: Array<{
+      Subnet?: string;
+      Gateway?: string;
+    }>;
+  };
+  Labels?: Record<string, string> | null;
+}
+
+/**
+ * Output of `/volumes`. The list-style endpoint does NOT include size data —
+ * that requires `/system/df` (see below) which is materially heavier.
+ */
+export interface DockerVolume {
+  Name: string;
+  Driver: string;
+  Mountpoint: string;
+  Scope?: string;
+  Labels?: Record<string, string> | null;
+  CreatedAt?: string;      // ISO 8601
+}
+
+export interface DockerVolumesResponse {
+  Volumes: DockerVolume[] | null;
+  Warnings: string[] | null;
+}
+
+/**
+ * Output of `/system/df`. Expensive on hosts with many volumes — we poll
+ * this on a separate, slower interval. Size is -1 when the driver doesn't
+ * report it.
+ */
+export interface DockerSystemDf {
+  Volumes?: Array<{
+    Name: string;
+    Driver: string;
+    UsageData?: {
+      Size: number;       // bytes; -1 when unknown
+      RefCount: number;   // how many containers reference it
+    } | null;
+  }>;
 }

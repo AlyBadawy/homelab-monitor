@@ -4,6 +4,9 @@ import type {
   DockerContainer,
   DockerContainerInspect,
   DockerContainerStats,
+  DockerNetwork,
+  DockerSystemDf,
+  DockerVolumesResponse,
   PortainerEndpoint,
 } from './types';
 
@@ -91,6 +94,35 @@ export class PortainerClient {
   ): Promise<DockerContainerInspect> {
     return this.get<DockerContainerInspect>(
       `/api/endpoints/${endpointId}/docker/containers/${containerId}/json`,
+    );
+  }
+
+  /** List all docker networks visible to this endpoint. */
+  listNetworks(endpointId: number): Promise<DockerNetwork[]> {
+    return this.get<DockerNetwork[]>(
+      `/api/endpoints/${endpointId}/docker/networks`,
+    );
+  }
+
+  /**
+   * List all docker volumes visible to this endpoint. Size data is NOT
+   * populated by this endpoint — use systemDf() for that.
+   */
+  listVolumes(endpointId: number): Promise<DockerVolumesResponse> {
+    return this.get<DockerVolumesResponse>(
+      `/api/endpoints/${endpointId}/docker/volumes`,
+    );
+  }
+
+  /**
+   * `/system/df` — heavier call that returns disk-usage data for volumes,
+   * images, and containers. We only consume Volumes.UsageData so we can
+   * render a Size column on the Volumes card. Poll this on a slower
+   * interval than the main tick.
+   */
+  systemDf(endpointId: number): Promise<DockerSystemDf> {
+    return this.get<DockerSystemDf>(
+      `/api/endpoints/${endpointId}/docker/system/df`,
     );
   }
 }

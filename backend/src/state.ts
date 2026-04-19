@@ -90,12 +90,63 @@ export interface TargetSummary {
   url?: string;
   httpStatusCode?: number | null;
   latencyMs?: number | null;
+  /**
+   * Docker compose/swarm stack name (from com.docker.compose.project or
+   * com.docker.stack.namespace). Null on standalone containers. Only set
+   * on kind='docker-container'.
+   */
+  stack?: string | null;
   updatedAt: number;
   error?: string;               // present when the last poll failed
 }
 
+/* ---------------------- Docker resources (networks, volumes) ---------------------- */
+
+export interface DockerNetworkSummary {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  /** True for the docker-installed default networks (bridge/host/none). */
+  builtIn: boolean;
+  internal: boolean;
+  attachable: boolean;
+  subnet: string | null;
+  gateway: string | null;
+  /** Number of running containers attached, derived from container inspects. */
+  attachedCount: number;
+}
+
+export interface DockerVolumeSummary {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  /** Stack label from com.docker.compose.project, if any. */
+  stack: string | null;
+  /**
+   * Bytes used on disk. Null when /system/df hasn't populated this
+   * volume yet (first slow tick), or the driver reports -1.
+   */
+  sizeBytes: number | null;
+  /** Containers currently referencing this volume (from /system/df). */
+  refCount: number | null;
+  createdAt: string | null;
+}
+
+export interface DockerEndpointResources {
+  endpointId: number;
+  endpointName: string;
+  networks: DockerNetworkSummary[];
+  volumes: DockerVolumeSummary[];
+  /** Unix ms when the size numbers were last updated. 0 if never. */
+  sizesUpdatedAt: number;
+  /** Last /system/df error, if any. Rest of the data can still be fresh. */
+  dfError?: string;
+}
+
 interface Snapshot {
   targets: Map<string, TargetSummary>;
+  dockerResources: DockerEndpointResources[];
   lastProxmoxError: string | null;
   lastUnasError: string | null;
   lastPortainerError: string | null;
@@ -104,6 +155,7 @@ interface Snapshot {
 
 const snapshot: Snapshot = {
   targets: new Map(),
+  dockerResources: [],
   lastProxmoxError: null,
   lastUnasError: null,
   lastPortainerError: null,
@@ -123,6 +175,7 @@ export function replaceByPrefix(prefix: string, targets: TargetSummary[]): void 
 
 export function getSummary(): {
   targets: TargetSummary[];
+  dockerResources: DockerEndpointResources[];
   generatedAt: number;
   errors: {
     proxmox: string | null;
@@ -132,6 +185,7 @@ export function getSummary(): {
 } {
   return {
     targets: Array.from(snapshot.targets.values()),
+    dockerResources: snapshot.dockerResources,
     generatedAt: snapshot.generatedAt,
     errors: {
       proxmox: snapshot.lastProxmoxError,
@@ -139,6 +193,15 @@ export function getSummary(): {
       portainer: snapshot.lastPortainerError,
     },
   };
+}
+
+/**
+ * Replace the whole docker resources array. Called by the Portainer poller
+ * after it has finished reading networks + volumes for every endpoint.
+ */
+export function setDockerResources(resources: DockerEndpointResources[]): void {
+  snapshot.dockerResources = resources;
+  snapshot.generatedAt = Date.now();
 }
 
 export function setProxmoxError(err: string | null): void {

@@ -37,6 +37,13 @@ export interface PortainerConfig {
   insecureTls: boolean;
   /** Poll interval (ms). Falls back to the app-wide POLL_INTERVAL_MS. */
   pollIntervalMs: number;
+  /**
+   * How often to refresh volume *sizes* via `/system/df`. That call is
+   * materially heavier than networks/volumes list; keep it slow. Default
+   * 60s. Rest of the Portainer data (containers, networks, volume list
+   * without size) is refreshed on `pollIntervalMs`.
+   */
+  dfIntervalMs: number;
 }
 
 export interface AppConfig {
@@ -110,6 +117,7 @@ export function loadConfig(): AppConfig {
       apiKey: portainerKey,
       insecureTls: envBool('PORTAINER_INSECURE_TLS', false),
       pollIntervalMs: envInt('PORTAINER_POLL_INTERVAL_MS', appPoll),
+      dfIntervalMs: envInt('PORTAINER_DF_INTERVAL_MS', 60_000),
     },
   };
 

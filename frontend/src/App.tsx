@@ -6,14 +6,21 @@ import { CardRow } from "./components/CardRow";
 import { ServicesCard } from "./components/ServicesCard";
 import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
+import { NetworksCard } from "./components/NetworksCard";
+import { VolumesCard } from "./components/VolumesCard";
 import {
   fetchSummary,
+  type DockerEndpointResources,
   type SummaryErrors,
   type TargetSummary,
 } from "./lib/api";
 
+/** Bucket label used for containers with no compose/swarm stack label. */
+const UNSTACKED_KEY = "__unstacked__";
+
 export default function App() {
   const [targets, setTargets] = useState<TargetSummary[]>([]);
+  const [dockerResources, setDockerResources] = useState<DockerEndpointResources[]>([]);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -36,6 +43,7 @@ export default function App() {
     try {
       const data = await fetchSummary(signal);
       setTargets(data.targets);
+      setDockerResources(data.dockerResources ?? []);
       setLastUpdated(data.generatedAt);
       setApiErrors(data.errors);
     } catch (e) {
@@ -56,17 +64,19 @@ export default function App() {
     };
   }, [load]);
 
-  // Bucket targets by role for the new layout:
-  //   Infrastructure row = Proxmox host(s) + UNAS/storage devices.
-  //   VMs row            = VMs + LXCs (max 3 per row, fills full width).
-  //   Databases row      = DB targets (same rules as VMs).
-  //   Docker row         = Docker containers surfaced via Portainer.
+  // Bucket targets by role for the layout:
+  //   Infrastructure row  = Proxmox host(s) + UNAS/storage devices.
+  //   VMs row             = VMs + LXCs (max 3 per row, fills full width).
+  //   Databases row       = DB targets (same rules as VMs).
+  //   dockerStackGroups   = ordered groups of Docker containers keyed by
+  //                         their compose/swarm stack label — each rendered
+  //                         as its own Section. "Unstacked" comes last.
   // Services are rendered separately via <ServicesCard>.
-  const { infra, vms, dockers, databases } = useMemo(() => {
+  const { infra, vms, databases, dockerStackGroups } = useMemo(() => {
     const infra: TargetSummary[] = [];
     const vms: TargetSummary[] = [];
-    const dockers: TargetSummary[] = [];
     const databases: TargetSummary[] = [];
+    const dockers: TargetSummary[] = [];
     for (const t of targets) {
       if (t.kind === "proxmox-host" || t.kind === "unas" || t.kind === "storage") {
         infra.push(t);
@@ -79,12 +89,29 @@ export default function App() {
       }
       // `service` kind is intentionally omitted — ServicesCard owns it.
     }
-    // Sort Docker containers: running first, then by name for stable ordering.
-    dockers.sort((a, b) => {
+    // Group dockers by stack label. Containers with no stack (plain `docker
+    // run`) land in an UNSTACKED bucket that's rendered last.
+    const stackMap = new Map<string, TargetSummary[]>();
+    for (const d of dockers) {
+      const key = d.stack ?? UNSTACKED_KEY;
+      const arr = stackMap.get(key);
+      if (arr) arr.push(d);
+      else stackMap.set(key, [d]);
+    }
+    // Sort containers within each stack: running first, then by name.
+    const sortContainers = (a: TargetSummary, b: TargetSummary) => {
       if (a.status === b.status) return a.name.localeCompare(b.name);
       return a.status === "online" ? -1 : 1;
-    });
-    return { infra, vms, dockers, databases };
+    };
+    const dockerStackGroups = Array.from(stackMap.entries())
+      .map(([key, list]) => ({ key, items: [...list].sort(sortContainers) }))
+      .sort((a, b) => {
+        // Unstacked bucket always last; named stacks alphabetically.
+        if (a.key === UNSTACKED_KEY) return 1;
+        if (b.key === UNSTACKED_KEY) return -1;
+        return a.key.localeCompare(b.key);
+      });
+    return { infra, vms, databases, dockerStackGroups };
   }, [targets]);
 
   const onSelect = (t: TargetSummary) => setSelectedId(t.id);
@@ -185,17 +212,62 @@ export default function App() {
           </Section>
         )}
 
-        {/* 4) Docker containers — same layout rules as VMs. */}
-        {dockers.length > 0 && (
-          <Section title="Docker Containers">
-            <CardRow
-              items={dockers}
-              maxPerRow={3}
-              keyFor={(t) => t.id}
-              renderItem={(t) => (
-                <TargetCard target={t} onSelect={onSelect} />
-              )}
-            />
+        {/* 4) Docker containers — one Section per compose stack. Within each
+            stack the card-row rules match the VMs section (3-up, last row
+            stretches). Unstacked (plain `docker run`) comes last so it
+            doesn't split up labelled stacks. */}
+        {dockerStackGroups.map((g) => {
+          const title =
+            g.key === UNSTACKED_KEY
+              ? "Docker · Unstacked"
+              : `Docker · ${g.key}`;
+          return (
+            <Section key={g.key} title={title}>
+              <CardRow
+                items={g.items}
+                maxPerRow={3}
+                keyFor={(t) => t.id}
+                renderItem={(t) => (
+                  <TargetCard target={t} onSelect={onSelect} />
+                )}
+              />
+            </Section>
+          );
+        })}
+
+        {/* 4b) Docker Resources — networks + volumes per endpoint. One pair
+            of cards per Docker endpoint. Hidden until the first poll lands
+            so we don't flash empty cards. */}
+        {dockerResources.length > 0 && (
+          <Section title="Docker Resources">
+            <div className="space-y-4">
+              {dockerResources.map((res) => (
+                <CardRow
+                  key={res.endpointId}
+                  items={[
+                    { type: "net" as const, res },
+                    { type: "vol" as const, res },
+                  ]}
+                  maxPerRow={2}
+                  keyFor={(i) => `${res.endpointId}-${i.type}`}
+                  renderItem={(i) =>
+                    i.type === "net" ? (
+                      <NetworksCard
+                        endpointName={i.res.endpointName}
+                        networks={i.res.networks}
+                      />
+                    ) : (
+                      <VolumesCard
+                        endpointName={i.res.endpointName}
+                        volumes={i.res.volumes}
+                        sizesUpdatedAt={i.res.sizesUpdatedAt}
+                        dfError={i.res.dfError}
+                      />
+                    )
+                  }
+                />
+              ))}
+            </div>
           </Section>
         )}
 
@@ -239,7 +311,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.9.0 · proxmox + unas + docker + services live
+          v0.10.0 · docker stacks · networks · volumes
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

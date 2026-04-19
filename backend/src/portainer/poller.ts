@@ -2,7 +2,11 @@ import type { AppConfig } from '../config';
 import { recordSample } from '../db';
 import {
   replaceByPrefix,
+  setDockerResources,
   setPortainerError,
+  type DockerEndpointResources,
+  type DockerNetworkSummary,
+  type DockerVolumeSummary,
   type TargetSummary,
 } from '../state';
 import { PortainerClient } from './client';
@@ -10,6 +14,10 @@ import type {
   DockerContainer,
   DockerContainerInspect,
   DockerContainerStats,
+  DockerNetwork,
+  DockerSystemDf,
+  DockerVolume,
+  PortainerEndpoint,
 } from './types';
 
 /**
@@ -23,6 +31,10 @@ import type {
  *        b. stats(id, stream=false)        — parallel, per running container
  *        c. inspect(id)                    — parallel, per running container,
  *                                            needed for StartedAt → uptime
+ *                                            AND attached-network discovery
+ *        d. listNetworks() / listVolumes() — one each per endpoint
+ *        e. systemDf()                     — cached on a slower interval
+ *                                            (cfg.portainer.dfIntervalMs)
  *
  * Network rates are computed the same way as the Proxmox poller: keep the
  * previous (rx, tx, ts) per container id, diff against the next tick.
@@ -39,6 +51,20 @@ export class PortainerPoller {
   private readonly prevNet = new Map<
     string,
     { rx: number; tx: number; ts: number }
+  >();
+
+  /**
+   * Cached /system/df volume data per endpoint. Refreshed on a slower tick
+   * (cfg.portainer.dfIntervalMs — default 60s) because the call is heavy
+   * on hosts with many volumes.
+   */
+  private readonly dfCache = new Map<
+    number,
+    {
+      updatedAt: number;
+      volumes: Map<string, { size: number | null; refCount: number | null }>;
+      error?: string;
+    }
   >();
 
   constructor(cfg: AppConfig) {
@@ -88,71 +114,15 @@ export class PortainerPoller {
     );
 
     const allTargets: TargetSummary[] = [];
+    const allResources: DockerEndpointResources[] = [];
 
     // Track which ids we saw this tick so we can prune stale prevNet entries
     // (containers that were deleted between polls).
     const seenIds = new Set<string>();
 
     for (const ep of dockerEndpoints) {
-      const containers = await this.client.listContainers(ep.Id);
-
-      // Pull stats + inspect in parallel for all running containers on this
-      // endpoint. For a stopped container we skip both calls — stats would
-      // return mostly-empty data and Docker throws 409 on some versions.
-      const perContainer = await Promise.all(
-        containers.map(async (c) => {
-          if (c.State !== 'running') {
-            return { c, stats: null, inspect: null };
-          }
-          const [stats, inspect] = await Promise.all([
-            this.client.containerStats(ep.Id, c.Id).catch(() => null),
-            this.client.inspectContainer(ep.Id, c.Id).catch(() => null),
-          ]);
-          return { c, stats, inspect };
-        }),
-      );
-
-      for (const { c, stats, inspect } of perContainer) {
-        const id = `docker-${ep.Id}-${c.Id.slice(0, 12)}`;
-        seenIds.add(id);
-
-        // Names from Docker come prefixed with '/'; strip for display.
-        const name = (c.Names?.[0] ?? c.Id.slice(0, 12)).replace(/^\//, '');
-        const running = c.State === 'running';
-
-        const cpuPct = running && stats ? calcCpuPct(stats) : null;
-        const memPct = running && stats ? calcMemPct(stats) : null;
-        const { netInBps, netOutBps } = this.calcNetRate(id, stats, running, now);
-
-        const uptimeSec = running && inspect
-          ? calcUptimeSec(inspect, now)
-          : null;
-
-        // Persist history for the 24h sparklines.
-        if (running) {
-          if (cpuPct != null) recordSample(id, 'cpu_pct', cpuPct, now);
-          if (memPct != null) recordSample(id, 'mem_pct', memPct, now);
-          if (netInBps != null) recordSample(id, 'net_in_bps', netInBps, now);
-          if (netOutBps != null) recordSample(id, 'net_out_bps', netOutBps, now);
-        }
-
-        allTargets.push({
-          id,
-          name,
-          kind: 'docker-container',
-          status: running ? 'online' : 'offline',
-          cpuPct,
-          memPct,
-          // Docker doesn't surface rootfs usage via the stats API. Leaving
-          // diskPct null keeps the MetricBar hidden; we can add a docker
-          // diff-based estimate later if users ask for it.
-          diskPct: null,
-          uptimeSec,
-          netInBps,
-          netOutBps,
-          updatedAt: now,
-        });
-      }
+      const epResources = await this.pollEndpoint(ep, now, allTargets, seenIds);
+      allResources.push(epResources);
     }
 
     // Prune prevNet entries for containers that are no longer reported.
@@ -160,9 +130,227 @@ export class PortainerPoller {
       if (!seenIds.has(id)) this.prevNet.delete(id);
     }
 
+    // Prune dfCache entries for endpoints that no longer exist.
+    const liveEpIds = new Set(dockerEndpoints.map((e) => e.Id));
+    for (const epId of Array.from(this.dfCache.keys())) {
+      if (!liveEpIds.has(epId)) this.dfCache.delete(epId);
+    }
+
     // One replaceByPrefix('docker-', ...) is enough because every docker id
     // starts with that prefix regardless of endpoint.
     replaceByPrefix('docker-', allTargets);
+    setDockerResources(allResources);
+  }
+
+  /**
+   * Poll one Docker endpoint: containers (+ stats/inspect), networks,
+   * volumes, and (on the slow interval) /system/df. Appends target rows to
+   * `allTargets` and returns the networks + volumes summary for this
+   * endpoint.
+   */
+  private async pollEndpoint(
+    ep: PortainerEndpoint,
+    now: number,
+    allTargets: TargetSummary[],
+    seenIds: Set<string>,
+  ): Promise<DockerEndpointResources> {
+    const containers = await this.client.listContainers(ep.Id);
+
+    // Pull stats + inspect in parallel for all running containers on this
+    // endpoint. For a stopped container we skip both calls — stats would
+    // return mostly-empty data and Docker throws 409 on some versions.
+    const perContainer = await Promise.all(
+      containers.map(async (c) => {
+        if (c.State !== 'running') {
+          return { c, stats: null, inspect: null };
+        }
+        const [stats, inspect] = await Promise.all([
+          this.client.containerStats(ep.Id, c.Id).catch(() => null),
+          this.client.inspectContainer(ep.Id, c.Id).catch(() => null),
+        ]);
+        return { c, stats, inspect };
+      }),
+    );
+
+    // Count attached containers per network-id while we still have the
+    // inspect data in hand (the /networks list endpoint doesn't provide
+    // this, and calling /networks/:id N times would be N+1).
+    const attachedPerNetwork = new Map<string, number>();
+
+    for (const { c, stats, inspect } of perContainer) {
+      const id = `docker-${ep.Id}-${c.Id.slice(0, 12)}`;
+      seenIds.add(id);
+
+      // Names from Docker come prefixed with '/'; strip for display.
+      const name = (c.Names?.[0] ?? c.Id.slice(0, 12)).replace(/^\//, '');
+      const running = c.State === 'running';
+
+      // Stack label: compose first, swarm second. Containers started via
+      // `docker run` (no stack) come back null so the UI can render them in
+      // an "Unstacked" bucket.
+      const stack = extractStackLabel(c);
+
+      const cpuPct = running && stats ? calcCpuPct(stats) : null;
+      const memPct = running && stats ? calcMemPct(stats) : null;
+      const { netInBps, netOutBps } = this.calcNetRate(id, stats, running, now);
+
+      const uptimeSec = running && inspect
+        ? calcUptimeSec(inspect, now)
+        : null;
+
+      // Walk the running container's attached networks and bump the per-id
+      // counter. Stopped containers don't count — they're not currently
+      // consuming an IP on the network.
+      if (running && inspect?.NetworkSettings?.Networks) {
+        for (const netAttach of Object.values(inspect.NetworkSettings.Networks)) {
+          const nid = netAttach?.NetworkID;
+          if (!nid) continue;
+          attachedPerNetwork.set(nid, (attachedPerNetwork.get(nid) ?? 0) + 1);
+        }
+      }
+
+      // Persist history for the 24h sparklines.
+      if (running) {
+        if (cpuPct != null) recordSample(id, 'cpu_pct', cpuPct, now);
+        if (memPct != null) recordSample(id, 'mem_pct', memPct, now);
+        if (netInBps != null) recordSample(id, 'net_in_bps', netInBps, now);
+        if (netOutBps != null) recordSample(id, 'net_out_bps', netOutBps, now);
+      }
+
+      allTargets.push({
+        id,
+        name,
+        kind: 'docker-container',
+        status: running ? 'online' : 'offline',
+        cpuPct,
+        memPct,
+        // Docker doesn't surface rootfs usage via the stats API. Leaving
+        // diskPct null keeps the MetricBar hidden; we can add a docker
+        // diff-based estimate later if users ask for it.
+        diskPct: null,
+        uptimeSec,
+        netInBps,
+        netOutBps,
+        stack,
+        updatedAt: now,
+      });
+    }
+
+    // Networks + volumes: one call each per endpoint. Failures on either
+    // shouldn't wipe the rest of the endpoint's data — default to empty and
+    // log.
+    let networksRaw: DockerNetwork[] = [];
+    let volumesRaw: DockerVolume[] = [];
+    try {
+      networksRaw = await this.client.listNetworks(ep.Id);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[portainer] listNetworks(${ep.Id}) failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+    try {
+      const volResp = await this.client.listVolumes(ep.Id);
+      volumesRaw = volResp.Volumes ?? [];
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[portainer] listVolumes(${ep.Id}) failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    // Refresh /system/df if the cache is missing or older than dfIntervalMs.
+    await this.refreshDfIfStale(ep.Id, now);
+    const dfEntry = this.dfCache.get(ep.Id);
+
+    const networks: DockerNetworkSummary[] = networksRaw.map((n) => {
+      const builtIn = n.Name === 'bridge' || n.Name === 'host' || n.Name === 'none';
+      const ipamConfig = n.IPAM?.Config?.[0];
+      return {
+        id: n.Id,
+        name: n.Name,
+        driver: n.Driver,
+        scope: n.Scope,
+        builtIn,
+        internal: Boolean(n.Internal),
+        attachable: Boolean(n.Attachable),
+        subnet: ipamConfig?.Subnet ?? null,
+        gateway: ipamConfig?.Gateway ?? null,
+        attachedCount: attachedPerNetwork.get(n.Id) ?? 0,
+      };
+    });
+
+    const volumes: DockerVolumeSummary[] = volumesRaw.map((v) => {
+      const stack =
+        v.Labels?.['com.docker.compose.project'] ??
+        v.Labels?.['com.docker.stack.namespace'] ??
+        null;
+      const df = dfEntry?.volumes.get(v.Name);
+      return {
+        name: v.Name,
+        driver: v.Driver,
+        mountpoint: v.Mountpoint,
+        stack,
+        sizeBytes: df?.size ?? null,
+        refCount: df?.refCount ?? null,
+        createdAt: v.CreatedAt ?? null,
+      };
+    });
+
+    return {
+      endpointId: ep.Id,
+      endpointName: ep.Name,
+      networks,
+      volumes,
+      sizesUpdatedAt: dfEntry?.updatedAt ?? 0,
+      dfError: dfEntry?.error,
+    };
+  }
+
+  /**
+   * Refresh the /system/df cache for an endpoint if it's missing or older
+   * than dfIntervalMs. Failures are stored on the cache entry (so the UI
+   * can show a warning) without wiping previous-tick data.
+   */
+  private async refreshDfIfStale(endpointId: number, now: number): Promise<void> {
+    const existing = this.dfCache.get(endpointId);
+    const stale =
+      !existing || now - existing.updatedAt >= this.cfg.portainer.dfIntervalMs;
+    if (!stale) return;
+
+    try {
+      const df: DockerSystemDf = await this.client.systemDf(endpointId);
+      const volMap = new Map<
+        string,
+        { size: number | null; refCount: number | null }
+      >();
+      for (const v of df.Volumes ?? []) {
+        // Driver reports -1 when it can't compute size; surface as null.
+        const size = v.UsageData?.Size;
+        const refCount = v.UsageData?.RefCount;
+        volMap.set(v.Name, {
+          size: typeof size === 'number' && size >= 0 ? size : null,
+          refCount: typeof refCount === 'number' ? refCount : null,
+        });
+      }
+      this.dfCache.set(endpointId, {
+        updatedAt: now,
+        volumes: volMap,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Keep any stale data we already had — only update the error string
+      // and timestamp so we don't retry on every fast tick.
+      this.dfCache.set(endpointId, {
+        updatedAt: existing?.updatedAt ?? 0,
+        volumes: existing?.volumes ?? new Map(),
+        error: msg,
+      });
+      // eslint-disable-next-line no-console
+      console.error(`[portainer] systemDf(${endpointId}) failed:`, msg);
+    }
   }
 
   /**
@@ -203,6 +391,20 @@ export class PortainerPoller {
 }
 
 /* ---------------- helpers ---------------- */
+
+/**
+ * Pull a stack name off a container's labels. Docker compose writes
+ * `com.docker.compose.project`; swarm writes `com.docker.stack.namespace`.
+ * Neither is present for containers started with plain `docker run`.
+ */
+function extractStackLabel(c: DockerContainer): string | null {
+  const labels = c.Labels ?? {};
+  return (
+    labels['com.docker.compose.project'] ??
+    labels['com.docker.stack.namespace'] ??
+    null
+  );
+}
 
 /**
  * Docker's CPU% formula (straight from `docker stats` source):

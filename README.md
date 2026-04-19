@@ -2,14 +2,15 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: v0.9.0 — Portainer (Docker) integration
+## Current status: v0.10.0 — Docker stacks, networks & volumes
 
 The dashboard now shows live data for:
 
 - **The Proxmox host** — CPU, memory, uptime, **CPU temperature (24h sparkline)**, and a list of **every enabled storage pool** (NFS, PBS, dir, lvmthin, zfspool, …) sorted biggest-used first. Pools with unknown size show "—" rather than being hidden.
 - **Every VM & LXC container** — CPU, memory, disk (LXC only — see note), uptime, **live network ↓/↑ rate**, and **count of backups** found for that VMID across every backup-content storage.
 - **Unifi UNAS Pro** (over SSH) — CPU, memory, uptime, **CPU temperature (24h sparkline)**, **storage pools with RAID health + nested share list**, and **per-drive SMART + temperature** (also with per-drive 24h temperature sparkline).
-- **Docker containers (via Portainer)** — one card per running container with CPU, memory, uptime, and live network ↓/↑ rate. Each Portainer-managed endpoint (standalone Docker, agent, Swarm) is polled individually.
+- **Docker containers (via Portainer)** — one card per running container with CPU, memory, uptime, and live network ↓/↑ rate. Containers are now **grouped into sections by compose/swarm stack** (from `com.docker.compose.project` / `com.docker.stack.namespace`); containers started with plain `docker run` fall into a final "Unstacked" section. Each Portainer-managed endpoint (standalone Docker, agent, Swarm) is polled individually.
+- **Docker networks & volumes** — a "Docker Resources" section with one pair of cards per endpoint. The **Networks** card lists driver, scope, subnet/gateway, internal flag, and live attached-container count (derived from container inspects, so it only counts running containers). The **Volumes** card lists driver, stack, mount path, size, and reference count — with orphans (refCount = 0) dimmed under a divider so "safe to prune" jumps out. Sizes come from `/system/df` which runs on its own slower interval (default 60s) so the fast tick stays fast even on hosts with many volumes.
 - **HTTP service checks** — add arbitrary URLs in the Services card to monitor latency, status code, and 24h availability strip. CRUD lives directly in the UI.
 
 Data is polled every 10 seconds and 24 hours of samples are persisted to SQLite. Every tile has a 24h drawer with per-metric charts.
@@ -62,6 +63,7 @@ Optional env vars:
 | `PORTAINER_API_KEY`          | —       | Read-only API token (User settings → Access tokens in Portainer). |
 | `PORTAINER_INSECURE_TLS`     | `false` | Flip to `true` if Portainer serves a self-signed cert. |
 | `PORTAINER_POLL_INTERVAL_MS` | inherits `POLL_INTERVAL_MS` | Docker stats are heavier — bump to 15–30s if your host is busy. |
+| `PORTAINER_DF_INTERVAL_MS`   | `60000` | How often to refresh volume sizes via `/system/df` (the heavy call). Raise on hosts with many large volumes. |
 
 Each poller is optional. If its required env vars are missing, it's disabled at startup with a warning; the other pollers keep running. Any live poller error shows up as an amber banner in the UI with the exact message.
 

@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.9.0
+    image: homelab-monitor-backend:0.10.0
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -64,6 +64,11 @@ services:
       # POLL_INTERVAL_MS above. Container stats are a heavier call than
       # Proxmox stats — bump this to 15000–30000 if your host is busy.
       PORTAINER_POLL_INTERVAL_MS: "${PORTAINER_POLL_INTERVAL_MS:-}"
+      # Optional: override how often volume sizes are refreshed via
+      # `/system/df`. That call is materially heavier than the networks/
+      # volumes list; defaults to 60000 (60s). Raise this further on hosts
+      # with many large volumes if you see sustained load.
+      PORTAINER_DF_INTERVAL_MS: "${PORTAINER_DF_INTERVAL_MS:-60000}"
     volumes:
       - backend_data:/data
       # Read-only mount for the UNAS SSH private key. Create ./secrets on the
@@ -80,7 +85,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.9.0
+    image: homelab-monitor-frontend:0.10.0
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:
