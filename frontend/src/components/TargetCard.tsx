@@ -30,6 +30,7 @@ const KIND_ICON: Record<TargetKind, LucideIcon> = {
   'proxmox-host': Server,
   vm: Cpu,
   container: Box,
+  'docker-container': Box,
   database: Database,
   storage: HardDrive,
   unas: HardDriveDownload,
@@ -40,6 +41,7 @@ const KIND_LABEL: Record<TargetKind, string> = {
   'proxmox-host': 'HYPERVISOR',
   vm: 'VM',
   container: 'CONTAINER',
+  'docker-container': 'DOCKER',
   database: 'DATABASE',
   storage: 'STORAGE',
   unas: 'UNAS',
@@ -57,7 +59,11 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
   const isHost = target.kind === 'proxmox-host';
   const isUnas = target.kind === 'unas';
   const isService = target.kind === 'service';
-  const showMiniStats = target.kind === 'vm' || target.kind === 'container';
+  const isDocker = target.kind === 'docker-container';
+  const showMiniStats =
+    target.kind === 'vm' ||
+    target.kind === 'container' ||
+    target.kind === 'docker-container';
 
   // Metrics we care about per-card — kept lean for the inline sparklines.
   // Disk is intentionally NOT fetched here for VMs/LXCs because (a) the disk
@@ -179,7 +185,7 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
               />
             }
           />
-          {!isHost && !isUnas && (
+          {!isHost && !isUnas && !isDocker && (
             <MetricBar
               label="Disk"
               value={target.diskPct}
@@ -213,21 +219,23 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
               tone="emerald"
               title="Current upload rate"
             />
-            <MiniStat
-              icon={Archive}
-              label="Backups"
-              value={
-                target.backupCount === null || target.backupCount === undefined
-                  ? '—'
-                  : String(target.backupCount)
-              }
-              tone={
-                target.backupCount && target.backupCount > 0
-                  ? 'muted'
-                  : 'amber'
-              }
-              title="Backups found across all backup-content storages"
-            />
+            {!isDocker && (
+              <MiniStat
+                icon={Archive}
+                label="Backups"
+                value={
+                  target.backupCount === null || target.backupCount === undefined
+                    ? '—'
+                    : String(target.backupCount)
+                }
+                tone={
+                  target.backupCount && target.backupCount > 0
+                    ? 'muted'
+                    : 'amber'
+                }
+                title="Backups found across all backup-content storages"
+              />
+            )}
             <MiniStat
               icon={Clock}
               label="Uptime"

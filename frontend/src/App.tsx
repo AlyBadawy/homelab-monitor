@@ -20,6 +20,7 @@ export default function App() {
   const [apiErrors, setApiErrors] = useState<SummaryErrors>({
     proxmox: null,
     unas: null,
+    portainer: null,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -59,22 +60,31 @@ export default function App() {
   //   Infrastructure row = Proxmox host(s) + UNAS/storage devices.
   //   VMs row            = VMs + LXCs (max 3 per row, fills full width).
   //   Databases row      = DB targets (same rules as VMs).
+  //   Docker row         = Docker containers surfaced via Portainer.
   // Services are rendered separately via <ServicesCard>.
-  const { infra, vms, databases } = useMemo(() => {
+  const { infra, vms, dockers, databases } = useMemo(() => {
     const infra: TargetSummary[] = [];
     const vms: TargetSummary[] = [];
+    const dockers: TargetSummary[] = [];
     const databases: TargetSummary[] = [];
     for (const t of targets) {
       if (t.kind === "proxmox-host" || t.kind === "unas" || t.kind === "storage") {
         infra.push(t);
       } else if (t.kind === "vm" || t.kind === "container") {
         vms.push(t);
+      } else if (t.kind === "docker-container") {
+        dockers.push(t);
       } else if (t.kind === "database") {
         databases.push(t);
       }
       // `service` kind is intentionally omitted — ServicesCard owns it.
     }
-    return { infra, vms, databases };
+    // Sort Docker containers: running first, then by name for stable ordering.
+    dockers.sort((a, b) => {
+      if (a.status === b.status) return a.name.localeCompare(b.name);
+      return a.status === "online" ? -1 : 1;
+    });
+    return { infra, vms, dockers, databases };
   }, [targets]);
 
   const onSelect = (t: TargetSummary) => setSelectedId(t.id);
@@ -124,6 +134,18 @@ export default function App() {
           </div>
         )}
 
+        {apiErrors.portainer && (
+          <div className="card border-accent-amber/40 bg-accent-amber/5">
+            <div className="flex items-center gap-2 card-title text-accent-amber">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Portainer poller error
+            </div>
+            <p className="mt-2 font-mono text-sm text-text-muted break-all">
+              {apiErrors.portainer}
+            </p>
+          </div>
+        )}
+
         {/* 1) Services — always at the top. The card owns its own empty
             state with an "Add service" CTA, so it renders even with no
             checks yet. */}
@@ -163,7 +185,21 @@ export default function App() {
           </Section>
         )}
 
-        {/* 4) Databases — same rules as VMs. */}
+        {/* 4) Docker containers — same layout rules as VMs. */}
+        {dockers.length > 0 && (
+          <Section title="Docker Containers">
+            <CardRow
+              items={dockers}
+              maxPerRow={3}
+              keyFor={(t) => t.id}
+              renderItem={(t) => (
+                <TargetCard target={t} onSelect={onSelect} />
+              )}
+            />
+          </Section>
+        )}
+
+        {/* 5) Databases — same rules as VMs. */}
         {databases.length > 0 && (
           <Section title="Databases">
             <CardRow
@@ -203,7 +239,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          chunk 2 · proxmox integration live · more services coming
+          v0.9.0 · proxmox + unas + docker + services live
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

@@ -27,6 +27,18 @@ export interface UnasConfig {
   execTimeoutMs: number;
 }
 
+export interface PortainerConfig {
+  enabled: boolean;
+  /** Base URL of the Portainer instance (no trailing slash). */
+  baseUrl: string;
+  /** API key created in Portainer UI → User settings → Access tokens. */
+  apiKey: string;
+  /** Skip TLS verify when Portainer ships a self-signed cert. */
+  insecureTls: boolean;
+  /** Poll interval (ms). Falls back to the app-wide POLL_INTERVAL_MS. */
+  pollIntervalMs: number;
+}
+
 export interface AppConfig {
   port: number;
   dataDir: string;
@@ -34,6 +46,7 @@ export interface AppConfig {
   historyRetentionMs: number;
   proxmox: ProxmoxConfig;
   unas: UnasConfig;
+  portainer: PortainerConfig;
 }
 
 function envBool(name: string, def = false): boolean {
@@ -62,10 +75,16 @@ export function loadConfig(): AppConfig {
   // Considered enabled when we have host+user and at least one credential.
   const unasEnabled = Boolean(unasHost && unasUser && (unasKeyPath || unasPassword));
 
+  const portainerBase = (process.env.PORTAINER_BASE_URL ?? '').replace(/\/+$/, '');
+  const portainerKey = (process.env.PORTAINER_API_KEY ?? '').trim();
+  const portainerEnabled = Boolean(portainerBase && portainerKey);
+
+  const appPoll = envInt('POLL_INTERVAL_MS', 10_000);
+
   const cfg: AppConfig = {
     port: envInt('PORT', 4000),
     dataDir: process.env.DATA_DIR ?? '/data',
-    pollIntervalMs: envInt('POLL_INTERVAL_MS', 10_000),
+    pollIntervalMs: appPoll,
     historyRetentionMs: envInt('HISTORY_RETENTION_MS', 24 * 60 * 60 * 1000),
     proxmox: {
       enabled: proxmoxEnabled,
@@ -85,6 +104,13 @@ export function loadConfig(): AppConfig {
       password: unasPassword,
       execTimeoutMs: envInt('UNAS_EXEC_TIMEOUT_MS', 15_000),
     },
+    portainer: {
+      enabled: portainerEnabled,
+      baseUrl: portainerBase,
+      apiKey: portainerKey,
+      insecureTls: envBool('PORTAINER_INSECURE_TLS', false),
+      pollIntervalMs: envInt('PORTAINER_POLL_INTERVAL_MS', appPoll),
+    },
   };
 
   // eslint-disable-next-line no-console
@@ -92,7 +118,8 @@ export function loadConfig(): AppConfig {
     `[homelab-monitor] config: port=${cfg.port} poll=${cfg.pollIntervalMs}ms ` +
       `proxmox=${cfg.proxmox.enabled ? cfg.proxmox.baseUrl : 'disabled'} ` +
       `insecureTls=${cfg.proxmox.insecureTls} ` +
-      `unas=${cfg.unas.enabled ? `${cfg.unas.user}@${cfg.unas.host}:${cfg.unas.port}` : 'disabled'}`,
+      `unas=${cfg.unas.enabled ? `${cfg.unas.user}@${cfg.unas.host}:${cfg.unas.port}` : 'disabled'} ` +
+      `portainer=${cfg.portainer.enabled ? cfg.portainer.baseUrl : 'disabled'}`,
   );
 
   return cfg;

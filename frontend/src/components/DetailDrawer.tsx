@@ -275,6 +275,10 @@ function computeMetricsForTarget(target: TargetSummary): string[] {
   if (target.kind === 'vm' || target.kind === 'container') {
     base.push('disk_pct', 'net_in_bps', 'net_out_bps');
   }
+  if (target.kind === 'docker-container') {
+    // Docker has no exposed rootfs %, so we skip disk_pct.
+    base.push('net_in_bps', 'net_out_bps');
+  }
   if (target.kind === 'proxmox-host') {
     base.push('cpu_temp_c');
     for (const pool of target.storages ?? []) {

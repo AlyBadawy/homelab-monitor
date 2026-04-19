@@ -6,7 +6,8 @@
 export type TargetKind =
   | 'proxmox-host'
   | 'vm'
-  | 'container'
+  | 'container'        // PVE LXC container (not Docker)
+  | 'docker-container' // Docker container surfaced via Portainer
   | 'database'
   | 'storage'
   | 'unas'
@@ -97,6 +98,7 @@ interface Snapshot {
   targets: Map<string, TargetSummary>;
   lastProxmoxError: string | null;
   lastUnasError: string | null;
+  lastPortainerError: string | null;
   generatedAt: number;
 }
 
@@ -104,6 +106,7 @@ const snapshot: Snapshot = {
   targets: new Map(),
   lastProxmoxError: null,
   lastUnasError: null,
+  lastPortainerError: null,
   generatedAt: 0,
 };
 
@@ -121,7 +124,11 @@ export function replaceByPrefix(prefix: string, targets: TargetSummary[]): void 
 export function getSummary(): {
   targets: TargetSummary[];
   generatedAt: number;
-  errors: { proxmox: string | null; unas: string | null };
+  errors: {
+    proxmox: string | null;
+    unas: string | null;
+    portainer: string | null;
+  };
 } {
   return {
     targets: Array.from(snapshot.targets.values()),
@@ -129,6 +136,7 @@ export function getSummary(): {
     errors: {
       proxmox: snapshot.lastProxmoxError,
       unas: snapshot.lastUnasError,
+      portainer: snapshot.lastPortainerError,
     },
   };
 }
@@ -140,5 +148,10 @@ export function setProxmoxError(err: string | null): void {
 
 export function setUnasError(err: string | null): void {
   snapshot.lastUnasError = err;
+  snapshot.generatedAt = Date.now();
+}
+
+export function setPortainerError(err: string | null): void {
+  snapshot.lastPortainerError = err;
   snapshot.generatedAt = Date.now();
 }

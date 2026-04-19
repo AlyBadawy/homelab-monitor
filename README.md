@@ -2,14 +2,17 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: Chunk 2.1 — Proxmox integration, expanded
+## Current status: v0.9.0 — Portainer (Docker) integration
 
 The dashboard now shows live data for:
 
-- **The Proxmox host** — CPU, memory, uptime, and a list of **every enabled storage pool** (NFS, PBS, dir, lvmthin, zfspool, …) sorted biggest-used first. Pools with unknown size show "—" rather than being hidden.
+- **The Proxmox host** — CPU, memory, uptime, **CPU temperature (24h sparkline)**, and a list of **every enabled storage pool** (NFS, PBS, dir, lvmthin, zfspool, …) sorted biggest-used first. Pools with unknown size show "—" rather than being hidden.
 - **Every VM & LXC container** — CPU, memory, disk (LXC only — see note), uptime, **live network ↓/↑ rate**, and **count of backups** found for that VMID across every backup-content storage.
+- **Unifi UNAS Pro** (over SSH) — CPU, memory, uptime, **CPU temperature (24h sparkline)**, **storage pools with RAID health + nested share list**, and **per-drive SMART + temperature** (also with per-drive 24h temperature sparkline).
+- **Docker containers (via Portainer)** — one card per running container with CPU, memory, uptime, and live network ↓/↑ rate. Each Portainer-managed endpoint (standalone Docker, agent, Swarm) is polled individually.
+- **HTTP service checks** — add arbitrary URLs in the Services card to monitor latency, status code, and 24h availability strip. CRUD lives directly in the UI.
 
-Data is polled every 10 seconds and 24 hours of samples are persisted to SQLite for future sparkline charts.
+Data is polled every 10 seconds and 24 hours of samples are persisted to SQLite. Every tile has a 24h drawer with per-metric charts.
 
 ### Known limitation: QEMU disk usage
 
@@ -17,7 +20,9 @@ For QEMU VMs, the dashboard shows "—" for Disk with the hint *"guest agent not
 
 LXC containers don't need this — their Disk value is already real.
 
-Still to come: Portainer container stats, Postgres, Nextcloud, Immich, and the Unifi UNAS.
+Docker containers do not surface a rootfs usage % via the stats API, so the Disk bar is hidden on Docker cards by design.
+
+Still to come: Postgres / Nextcloud / Immich app-level metrics.
 
 ## Stack
 
@@ -43,15 +48,22 @@ environment:
 
 Optional env vars:
 
-| Var                      | Default | Notes |
-| ------------------------ | ------- | ----- |
-| `PORT`                   | `4000`  | Backend listen port (inside the container) |
-| `DATA_DIR`               | `/data` | Where `monitor.db` is written |
-| `POLL_INTERVAL_MS`       | `10000` | How often the Proxmox poller runs |
-| `HISTORY_RETENTION_MS`   | `86400000` | 24h. Samples older than this are pruned every 5 min |
-| `PROXMOX_INSECURE_TLS`   | `false` | Skip TLS verification — needed if hitting PVE's self-signed cert directly |
+| Var                          | Default | Notes |
+| ---------------------------- | ------- | ----- |
+| `PORT`                       | `4000`  | Backend listen port (inside the container) |
+| `DATA_DIR`                   | `/data` | Where `monitor.db` is written |
+| `POLL_INTERVAL_MS`           | `10000` | How often each poller runs |
+| `HISTORY_RETENTION_MS`       | `86400000` | 24h. Samples older than this are pruned every 5 min |
+| `PROXMOX_INSECURE_TLS`       | `false` | Skip TLS verification — needed if hitting PVE's self-signed cert directly |
+| `UNAS_HOST` / `UNAS_USER`    | —       | SSH host + user. When both (plus a credential) are set, the UNAS poller starts. |
+| `UNAS_SSH_KEY_PATH`          | —       | Path to the read-only SSH key inside the container (mounted from `./secrets`). |
+| `UNAS_PASSWORD`              | —       | Password fallback if no key is mounted. |
+| `PORTAINER_BASE_URL`         | —       | e.g. `https://portainer.in.example.com` — no trailing slash. |
+| `PORTAINER_API_KEY`          | —       | Read-only API token (User settings → Access tokens in Portainer). |
+| `PORTAINER_INSECURE_TLS`     | `false` | Flip to `true` if Portainer serves a self-signed cert. |
+| `PORTAINER_POLL_INTERVAL_MS` | inherits `POLL_INTERVAL_MS` | Docker stats are heavier — bump to 15–30s if your host is busy. |
 
-If any of `PROXMOX_BASE_URL`, `PROXMOX_TOKEN_ID`, or `PROXMOX_TOKEN_SECRET` are missing, the Proxmox poller is disabled and the backend logs a warning on startup (the dashboard will then show an empty-state card explaining that).
+Each poller is optional. If its required env vars are missing, it's disabled at startup with a warning; the other pollers keep running. Any live poller error shows up as an amber banner in the UI with the exact message.
 
 ## Proxmox API token setup
 
@@ -119,17 +131,24 @@ If Proxmox polling fails you'll see an amber banner with the exact error message
 
 | Method | Path                                | Purpose |
 | ------ | ----------------------------------- | ------- |
-| GET    | `/api/health`                       | Liveness + whether Proxmox poller is enabled |
-| GET    | `/api/stats/summary`                | All target tiles + last poller error |
-| GET    | `/api/stats/history/:target/:metric` | 24h sample history (used by Chunk 7) |
+| GET    | `/api/health`                       | Liveness + per-poller enabled flags (proxmox, unas, portainer) |
+| GET    | `/api/stats/summary`                | All target tiles + last per-poller error |
+| GET    | `/api/stats/history/:target?metrics=a,b` | 24h sample history (batched, server-downsampled) |
+| GET    | `/api/services`                     | List configured HTTP checks |
+| POST   | `/api/services`                     | Create a new HTTP check |
+| PATCH  | `/api/services/:id`                 | Update an existing check |
+| DELETE | `/api/services/:id`                 | Remove a check |
 
 Metrics recorded per target today:
 
-- `cpu_pct`, `mem_pct` — for hosts, VMs, and containers
-- `rootfs_pct` — for the Proxmox host
-- `storage:<poolname>:used_pct` — one per active pool on the Proxmox host
-- `disk_pct` — for LXC containers (QEMU VMs will be added once guest-agent integration lands)
-- `net_in_bps`, `net_out_bps` — for VMs and containers
+- `cpu_pct`, `mem_pct` — for hosts, VMs, LXCs, Docker containers, and UNAS
+- `rootfs_pct` — for the Proxmox host and the UNAS
+- `cpu_temp_c` — for the Proxmox host and the UNAS
+- `storage:<poolname>:used_pct` — one per active pool on the Proxmox host / UNAS
+- `drive:<device>:temp_c` — one per UNAS drive that reports SMART temperature
+- `disk_pct` — for LXC containers (QEMU VMs will be added once guest-agent integration lands; Docker does not expose this)
+- `net_in_bps`, `net_out_bps` — for VMs, LXCs, and Docker containers
+- `http_up`, `http_latency_ms` — for configured HTTP service checks
 
 ## Data model
 
@@ -150,21 +169,24 @@ SQLite file lives on the `backend_data` docker volume (`/data/monitor.db` inside
 
 ## Target ID scheme
 
-| Kind             | ID format              | Example |
-| ---------------- | ---------------------- | ------- |
-| Proxmox host     | `proxmox-host`         | (first / only node) |
-| Extra PVE nodes  | `proxmox-host-<node>`  | `proxmox-host-pve2` |
-| Proxmox VM       | `qemu-<vmid>`          | `qemu-101` |
-| Proxmox LXC      | `lxc-<vmid>`           | `lxc-200` |
+| Kind              | ID format                                  | Example |
+| ----------------- | ------------------------------------------ | ------- |
+| Proxmox host      | `proxmox-host`                             | (first / only node) |
+| Extra PVE nodes   | `proxmox-host-<node>`                      | `proxmox-host-pve2` |
+| Proxmox VM        | `qemu-<vmid>`                              | `qemu-101` |
+| Proxmox LXC       | `lxc-<vmid>`                               | `lxc-200` |
+| UNAS              | `unas`                                     | — |
+| Docker container  | `docker-<endpointId>-<first12charsOfId>`   | `docker-1-a3f90b21cc47` |
+| HTTP service      | `service-<uuid>`                           | `service-…` |
 
-## Roadmap (next chunks)
+## Roadmap
 
 1. ~~**Chunk 1** — scaffold~~
 2. ~~**Chunk 2** — Proxmox: host + VMs + storage pools~~
-3. **Chunk 3** — Portainer integration: container-level CPU/mem/status from both Portainer instances
+3. ~~**Chunk 3** — Portainer integration: container-level CPU/mem/network/status~~
 4. **Chunk 4** — Postgres metrics: connections, db size, replication lag
 5. **Chunk 5** — Nextcloud / Immich app-level stats
-6. **Chunk 6** — Unifi UNAS: capacity, temps, SMART, RAID health
-7. **Chunk 7** — Sparkline charts using the SQLite 24h history
+6. ~~**Chunk 6** — Unifi UNAS: capacity, temps, SMART, RAID health~~
+7. ~~**Chunk 7** — Sparkline + 24h history charts~~
 
-Each chunk will start with a round of questions before any code lands.
+Each chunk starts with a round of questions before any code lands.

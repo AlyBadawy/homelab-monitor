@@ -7,6 +7,7 @@ export type TargetKind =
   | 'proxmox-host'
   | 'vm'
   | 'container'
+  | 'docker-container'
   | 'database'
   | 'storage'
   | 'unas'
@@ -80,6 +81,7 @@ export interface TargetSummary {
 export interface SummaryErrors {
   proxmox: string | null;
   unas: string | null;
+  portainer: string | null;
 }
 
 export interface SummaryResponse {
@@ -101,6 +103,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
   uptimeSec: number;
   proxmox: 'enabled' | 'disabled';
   unas: 'enabled' | 'disabled';
+  portainer: 'enabled' | 'disabled';
 }> {
   const r = await fetch('/api/health', { signal });
   if (!r.ok) throw new Error(`health failed: ${r.status}`);
@@ -109,6 +112,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
     uptimeSec: number;
     proxmox: 'enabled' | 'disabled';
     unas: 'enabled' | 'disabled';
+    portainer: 'enabled' | 'disabled';
   };
 }
 

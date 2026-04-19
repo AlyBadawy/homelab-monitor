@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.8.0
+    image: homelab-monitor-backend:0.9.0
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -49,6 +49,21 @@ services:
       UNAS_SSH_KEY_PASSPHRASE: "${UNAS_SSH_KEY_PASSPHRASE:-}"
       UNAS_PASSWORD: "${UNAS_PASSWORD:-}"
       UNAS_EXEC_TIMEOUT_MS: "${UNAS_EXEC_TIMEOUT_MS:-15000}"
+
+      # ----- Portainer (Docker containers) -----
+      # Create a read-only API key in Portainer UI:
+      #   User settings → Access tokens → Add access token
+      # The key inherits that user's Docker permissions, so create a
+      # dedicated read-only user and mint the key from it.
+      # Inject both via Portainer stack env vars — never commit them.
+      PORTAINER_BASE_URL: "${PORTAINER_BASE_URL:-}"
+      PORTAINER_API_KEY: "${PORTAINER_API_KEY:-}"
+      # Set to "true" when Portainer ships with a self-signed cert.
+      PORTAINER_INSECURE_TLS: "${PORTAINER_INSECURE_TLS:-false}"
+      # Optional: override the Portainer poll interval. Defaults to
+      # POLL_INTERVAL_MS above. Container stats are a heavier call than
+      # Proxmox stats — bump this to 15000–30000 if your host is busy.
+      PORTAINER_POLL_INTERVAL_MS: "${PORTAINER_POLL_INTERVAL_MS:-}"
     volumes:
       - backend_data:/data
       # Read-only mount for the UNAS SSH private key. Create ./secrets on the
@@ -65,7 +80,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.7.3
+    image: homelab-monitor-frontend:0.9.0
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

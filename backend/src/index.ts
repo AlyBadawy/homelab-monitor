@@ -7,6 +7,7 @@ import statsRouter from './routes/stats';
 import servicesRouter from './routes/services';
 import { ProxmoxPoller } from './proxmox/poller';
 import { UnasPoller } from './unas/poller';
+import { PortainerPoller } from './portainer/poller';
 import { ServiceHealthPoller } from './services/poller';
 import { listChecks } from './services/repo';
 
@@ -26,6 +27,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
     uptimeSec: Math.round(process.uptime()),
     proxmox: cfg.proxmox.enabled ? 'enabled' : 'disabled',
     unas: cfg.unas.enabled ? 'enabled' : 'disabled',
+    portainer: cfg.portainer.enabled ? 'enabled' : 'disabled',
   });
 });
 
@@ -59,6 +61,19 @@ if (cfg.unas.enabled) {
   );
 }
 
+let portainerPoller: PortainerPoller | null = null;
+if (cfg.portainer.enabled) {
+  portainerPoller = new PortainerPoller(cfg);
+  portainerPoller.start();
+  // eslint-disable-next-line no-console
+  console.log('[homelab-monitor] portainer poller started');
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[homelab-monitor] portainer disabled (missing PORTAINER_BASE_URL/API_KEY)',
+  );
+}
+
 // Service health poller always runs; if the DB has no checks, it no-ops.
 const serviceHealthPoller = new ServiceHealthPoller(cfg);
 serviceHealthPoller.start();
@@ -77,6 +92,7 @@ function shutdown(signal: string): void {
   console.log(`[homelab-monitor] ${signal} received, shutting down…`);
   proxmoxPoller?.stop();
   unasPoller?.stop();
+  portainerPoller?.stop();
   serviceHealthPoller.stop();
   server.close(() => {
     closeDb();
