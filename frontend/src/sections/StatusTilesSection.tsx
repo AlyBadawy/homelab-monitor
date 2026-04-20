@@ -1,12 +1,12 @@
-import { useMemo } from 'react';
-import { StatusTile, type TileState } from '../components/StatusTile';
+import { useMemo } from "react";
+import { StatusTile, type TileState } from "../components/StatusTile";
 import type {
   DockerEndpointResources,
   SummaryErrors,
   TargetKind,
   TargetStatus,
   TargetSummary,
-} from '../lib/api';
+} from "../lib/api";
 
 interface StatusTilesSectionProps {
   targets: TargetSummary[];
@@ -66,7 +66,7 @@ interface TileSpec {
   title?: string;
 }
 
-const TBD_TITLE = 'Integration not wired up yet';
+const TBD_TITLE = "Integration not wired up yet";
 
 function buildTiles(
   targets: TargetSummary[],
@@ -75,44 +75,50 @@ function buildTiles(
 ): TileSpec[] {
   return [
     // Row 1 — infrastructure + first-class apps
+    tbdTile("router", "Router"),
+    tbdTile("switch", "Switch"),
+    singleTile(
+      "unas",
+      "UNAS",
+      targets,
+      apiErrors.unas,
+      (t) => t.kind === "unas",
+    ),
     hypervisorTile(targets, apiErrors.proxmox),
-    singleTile('unas', 'UNAS', targets, apiErrors.unas, (t) => t.kind === 'unas'),
-    tbdTile('switch', 'Switch'),
-    tbdTile('router', 'Router'),
-    singleTile(
-      'nextcloud',
-      'Nextcloud',
-      targets,
-      apiErrors.nextcloud,
-      (t) => t.kind === 'nextcloud',
+    aggregateTile(
+      "vms",
+      "VMs",
+      targets.filter((t) => t.kind === "vm" || t.kind === "container"),
     ),
-    singleTile(
-      'immich',
-      'Immich',
-      targets,
-      apiErrors.immich,
-      (t) => t.kind === 'immich',
-    ),
+    tbdTile("ups", "UPS"),
     // Row 2 — platform rollups
+    tbdTile("databases", "Databases"),
     dockerTile(targets, dockerResources, apiErrors.portainer),
     aggregateTile(
-      'services',
-      'Services',
-      targets.filter((t) => t.kind === 'service'),
+      "services",
+      "Services",
+      targets.filter((t) => t.kind === "service"),
     ),
-    aggregateTile(
-      'vms',
-      'VMs',
-      targets.filter((t) => t.kind === 'vm' || t.kind === 'container'),
+    singleTile(
+      "nextcloud",
+      "Nextcloud",
+      targets,
+      apiErrors.nextcloud,
+      (t) => t.kind === "nextcloud",
     ),
-    tbdTile('databases', 'Databases'),
-    tbdTile('backups', 'Backups'),
-    tbdTile('ups', 'UPS'),
+    singleTile(
+      "immich",
+      "Immich",
+      targets,
+      apiErrors.immich,
+      (t) => t.kind === "immich",
+    ),
+    tbdTile("backups", "Backups"),
   ];
 }
 
 function tbdTile(key: string, label: string): TileSpec {
-  return { key, label, state: 'tbd', title: TBD_TITLE };
+  return { key, label, state: "tbd", title: TBD_TITLE };
 }
 
 /**
@@ -133,9 +139,9 @@ function singleTile(
     return {
       key,
       label,
-      state: 'unknown',
-      detail: pollerError ? 'ERROR' : 'UNKNOWN',
-      title: pollerError ?? 'No data yet',
+      state: "unknown",
+      detail: pollerError ? "ERROR" : "UNKNOWN",
+      title: pollerError ?? "No data yet",
     };
   }
   const state = statusToTileState(target.status);
@@ -143,7 +149,7 @@ function singleTile(
     key,
     label,
     state,
-    detail: state === 'ok' ? 'OK' : state === 'error' ? 'OFFLINE' : 'UNKNOWN',
+    detail: state === "ok" ? "OK" : state === "error" ? "OFFLINE" : "UNKNOWN",
     title: pollerError ?? target.error ?? target.name,
   };
 }
@@ -157,28 +163,28 @@ function hypervisorTile(
   pollerError: string | null,
 ): TileSpec {
   const hosts = targets.filter(
-    (t) => t.kind === ('proxmox-host' satisfies TargetKind),
+    (t) => t.kind === ("proxmox-host" satisfies TargetKind),
   );
   if (hosts.length === 0) {
     return {
-      key: 'hypervisor',
-      label: 'Hypervisor',
-      state: 'unknown',
-      detail: pollerError ? 'ERROR' : 'UNKNOWN',
-      title: pollerError ?? 'No data yet',
+      key: "hypervisor",
+      label: "Hypervisor",
+      state: "unknown",
+      detail: pollerError ? "ERROR" : "UNKNOWN",
+      title: pollerError ?? "No data yet",
     };
   }
   if (hosts.length === 1) {
     const state = statusToTileState(hosts[0].status);
     return {
-      key: 'hypervisor',
-      label: 'Hypervisor',
+      key: "hypervisor",
+      label: "Hypervisor",
       state,
-      detail: state === 'ok' ? 'OK' : state === 'error' ? 'OFFLINE' : 'UNKNOWN',
+      detail: state === "ok" ? "OK" : state === "error" ? "OFFLINE" : "UNKNOWN",
       title: pollerError ?? hosts[0].name,
     };
   }
-  return aggregateTile('hypervisor', 'Hypervisor', hosts);
+  return aggregateTile("hypervisor", "Hypervisor", hosts);
 }
 
 /**
@@ -192,38 +198,38 @@ function dockerTile(
   dockerResources: DockerEndpointResources[],
   pollerError: string | null,
 ): TileSpec {
-  const containers = targets.filter((t) => t.kind === 'docker-container');
+  const containers = targets.filter((t) => t.kind === "docker-container");
   const hasEndpoint = dockerResources.length > 0;
 
   if (!hasEndpoint && containers.length === 0) {
     return {
-      key: 'docker',
-      label: 'Docker',
-      state: 'unknown',
-      detail: pollerError ? 'ERROR' : 'UNKNOWN',
-      title: pollerError ?? 'No Portainer data yet',
+      key: "docker",
+      label: "Docker",
+      state: "unknown",
+      detail: pollerError ? "ERROR" : "UNKNOWN",
+      title: pollerError ?? "No Portainer data yet",
     };
   }
 
   if (pollerError) {
     return {
-      key: 'docker',
-      label: 'Docker',
-      state: 'error',
-      detail: 'ERROR',
+      key: "docker",
+      label: "Docker",
+      state: "error",
+      detail: "ERROR",
       title: pollerError,
     };
   }
 
-  const online = containers.filter((c) => c.status === 'online').length;
+  const online = containers.filter((c) => c.status === "online").length;
   const total = containers.length;
-  const anyOffline = containers.some((c) => c.status === 'offline');
+  const anyOffline = containers.some((c) => c.status === "offline");
 
   return {
-    key: 'docker',
-    label: 'Docker',
-    state: anyOffline ? 'warn' : 'ok',
-    detail: total > 0 ? `${online}/${total} UP` : 'OK',
+    key: "docker",
+    label: "Docker",
+    state: anyOffline ? "warn" : "ok",
+    detail: total > 0 ? `${online}/${total} UP` : "OK",
     title: `${dockerResources.length} endpoint(s), ${total} container(s)`,
   };
 }
@@ -240,23 +246,23 @@ function aggregateTile(
   items: TargetSummary[],
 ): TileSpec {
   if (items.length === 0) {
-    return { key, label, state: 'tbd', title: 'Nothing reporting yet' };
+    return { key, label, state: "tbd", title: "Nothing reporting yet" };
   }
-  const online = items.filter((t) => t.status === 'online').length;
-  const offline = items.filter((t) => t.status === 'offline').length;
+  const online = items.filter((t) => t.status === "online").length;
+  const offline = items.filter((t) => t.status === "offline").length;
   const total = items.length;
 
   let state: TileState;
-  if (offline > 0) state = 'error';
-  else if (online === total) state = 'ok';
-  else state = 'unknown';
+  if (offline > 0) state = "error";
+  else if (online === total) state = "ok";
+  else state = "unknown";
 
   const detail = `${online}/${total} UP`;
   return { key, label, state, detail, title: detail };
 }
 
 function statusToTileState(status: TargetStatus): TileState {
-  if (status === 'online') return 'ok';
-  if (status === 'offline') return 'error';
-  return 'unknown';
+  if (status === "online") return "ok";
+  if (status === "offline") return "error";
+  return "unknown";
 }
