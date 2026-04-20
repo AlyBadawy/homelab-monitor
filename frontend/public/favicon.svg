@@ -1,5 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    Mirrors the Header component: lucide `Activity` pulse (accent-cyan)
+    on bg-900, with an accent-emerald pulse dot in the top-right corner.
+    Colors pulled from tailwind.config.js so the tab icon matches the app.
+  -->
   <rect width="32" height="32" rx="6" fill="#07090d"/>
-  <path d="M6 20 L12 12 L16 16 L20 10 L26 20" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="26" cy="8" r="2" fill="#34d399"/>
+  <g transform="translate(4,4)">
+    <path
+      d="M22 12h-4l-3 9L9 3l-3 9H2"
+      stroke="#22d3ee"
+      stroke-width="2.25"
+      fill="none"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+  <circle cx="26" cy="6" r="2.25" fill="#34d399"/>
 </svg>
