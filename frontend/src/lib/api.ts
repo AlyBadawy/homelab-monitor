@@ -70,6 +70,40 @@ export interface NextcloudDetails {
   appsWithUpdates: number | null;
 }
 
+/** Per-user row in the Immich top-N table. */
+export interface ImmichUserUsage {
+  label: string;
+  photos: number | null;
+  videos: number | null;
+  usageBytes: number | null;
+  quotaBytes: number | null;
+}
+
+/** One queue's snapshot in the Immich per-queue grid. */
+export interface ImmichJobQueue {
+  name: string;
+  active: number;
+  waiting: number;
+  failed: number;
+  paused: boolean;
+}
+
+/**
+ * Immich rich details — only populated on kind='immich'.
+ */
+export interface ImmichDetails {
+  photosTotal: number | null;
+  videosTotal: number | null;
+  libraryBytes: number | null;
+  libraryPhotoBytes: number | null;
+  libraryVideoBytes: number | null;
+  userCount: number | null;
+  users: ImmichUserUsage[];
+  jobs: ImmichJobQueue[];
+  jobsBacklog: number;
+  jobsFailed: number;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -99,6 +133,8 @@ export interface TargetSummary {
   stack?: string | null;
   /** Nextcloud rich details — only populated on kind='nextcloud'. */
   nextcloud?: NextcloudDetails;
+  /** Immich rich details — only populated on kind='immich'. */
+  immich?: ImmichDetails;
   updatedAt: number;
   error?: string;
 }
@@ -108,6 +144,7 @@ export interface SummaryErrors {
   unas: string | null;
   portainer: string | null;
   nextcloud: string | null;
+  immich: string | null;
 }
 
 /* ---- Docker resources (networks, volumes) ----------------------------- */
@@ -172,6 +209,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
   unas: 'enabled' | 'disabled';
   portainer: 'enabled' | 'disabled';
   nextcloud: 'enabled' | 'disabled';
+  immich: 'enabled' | 'disabled';
 }> {
   const r = await fetch('/api/health', { signal });
   if (!r.ok) throw new Error(`health failed: ${r.status}`);
@@ -182,6 +220,7 @@ export async function fetchHealth(signal?: AbortSignal): Promise<{
     unas: 'enabled' | 'disabled';
     portainer: 'enabled' | 'disabled';
     nextcloud: 'enabled' | 'disabled';
+    immich: 'enabled' | 'disabled';
   };
 }
 

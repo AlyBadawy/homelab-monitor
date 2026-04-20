@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.11.0
+    image: homelab-monitor-backend:0.12.0
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -84,6 +84,22 @@ services:
       # Defaults to 60s. Raise on shared hosts — the serverinfo call walks
       # the installed-apps list which can be slow on large instances.
       NEXTCLOUD_POLL_INTERVAL_MS: "${NEXTCLOUD_POLL_INTERVAL_MS:-60000}"
+
+      # ----- Immich (admin API monitoring) -----
+      # Enable by setting BASE_URL + API_KEY. Mint the key in:
+      #   Account → API keys → New API Key → pick the `admin` permission set
+      # The `admin` scope is required for /api/server/statistics and
+      # /api/jobs (the two read-only endpoints this monitor calls).
+      # The monitor never writes; flipping this on grants a read-only
+      # view of library totals, per-user usage, and the job-queue grid
+      # on the Immich Applications tile.
+      IMMICH_BASE_URL: "${IMMICH_BASE_URL:-}"
+      IMMICH_API_KEY: "${IMMICH_API_KEY:-}"
+      # Flip to "true" if Immich serves a self-signed cert.
+      IMMICH_INSECURE_TLS: "${IMMICH_INSECURE_TLS:-false}"
+      # Defaults to 60s. /api/jobs is fast, but /api/server/statistics
+      # walks every user — raise on instances with thousands of users.
+      IMMICH_POLL_INTERVAL_MS: "${IMMICH_POLL_INTERVAL_MS:-60000}"
     volumes:
       - backend_data:/data
       # Read-only mount for the UNAS SSH private key. Create ./secrets on the
@@ -100,7 +116,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.11.0
+    image: homelab-monitor-frontend:0.12.0
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

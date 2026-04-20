@@ -9,6 +9,7 @@ import { DetailDrawer } from "./components/DetailDrawer";
 import { NetworksCard } from "./components/NetworksCard";
 import { VolumesCard } from "./components/VolumesCard";
 import { NextcloudCard } from "./components/NextcloudCard";
+import { ImmichCard } from "./components/ImmichCard";
 import {
   fetchSummary,
   type DockerEndpointResources,
@@ -30,6 +31,7 @@ export default function App() {
     unas: null,
     portainer: null,
     nextcloud: null,
+    immich: null,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -197,6 +199,18 @@ export default function App() {
           </div>
         )}
 
+        {apiErrors.immich && (
+          <div className="card border-accent-amber/40 bg-accent-amber/5">
+            <div className="flex items-center gap-2 card-title text-accent-amber">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Immich poller error
+            </div>
+            <p className="mt-2 font-mono text-sm text-text-muted break-all">
+              {apiErrors.immich}
+            </p>
+          </div>
+        )}
+
         {/* 1) Services — always at the top. The card owns its own empty
             state with an "Add service" CTA, so it renders even with no
             checks yet. */}
@@ -309,8 +323,11 @@ export default function App() {
                 if (t.kind === "nextcloud") {
                   return <NextcloudCard target={t} onSelect={onSelect} />;
                 }
-                // Future kinds (immich, etc.) fall back to the generic card
-                // until we ship a bespoke one for them.
+                if (t.kind === "immich") {
+                  return <ImmichCard target={t} onSelect={onSelect} />;
+                }
+                // Future kinds fall back to the generic card until we ship
+                // a bespoke one for them.
                 return <TargetCard target={t} onSelect={onSelect} />;
               }}
             />
@@ -357,7 +374,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.11.0 · nextcloud serverinfo
+          v0.12.0 · immich library & jobs
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

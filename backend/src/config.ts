@@ -64,6 +64,26 @@ export interface NextcloudConfig {
   pollIntervalMs: number;
 }
 
+export interface ImmichConfig {
+  enabled: boolean;
+  /** Base URL of the Immich instance (no trailing slash). */
+  baseUrl: string;
+  /**
+   * Admin-scoped API key. Immich mints keys under Account → API keys with
+   * configurable permissions; server-statistics and jobs endpoints require
+   * the `admin` permission set, so the key must be created by an admin user.
+   * Sent as the `x-api-key` header.
+   */
+  apiKey: string;
+  /** Skip TLS verify when Immich sits behind a self-signed cert. */
+  insecureTls: boolean;
+  /**
+   * Poll interval (ms). Library totals tick up slowly and job queues don't
+   * benefit from sub-minute polling, so 60s is a healthy default.
+   */
+  pollIntervalMs: number;
+}
+
 export interface AppConfig {
   port: number;
   dataDir: string;
@@ -73,6 +93,7 @@ export interface AppConfig {
   unas: UnasConfig;
   portainer: PortainerConfig;
   nextcloud: NextcloudConfig;
+  immich: ImmichConfig;
 }
 
 function envBool(name: string, def = false): boolean {
@@ -108,6 +129,10 @@ export function loadConfig(): AppConfig {
   const ncBase = (process.env.NEXTCLOUD_BASE_URL ?? '').replace(/\/+$/, '');
   const ncToken = (process.env.NEXTCLOUD_TOKEN ?? '').trim();
   const nextcloudEnabled = Boolean(ncBase && ncToken);
+
+  const immichBase = (process.env.IMMICH_BASE_URL ?? '').replace(/\/+$/, '');
+  const immichKey = (process.env.IMMICH_API_KEY ?? '').trim();
+  const immichEnabled = Boolean(immichBase && immichKey);
 
   const appPoll = envInt('POLL_INTERVAL_MS', 10_000);
 
@@ -149,6 +174,13 @@ export function loadConfig(): AppConfig {
       insecureTls: envBool('NEXTCLOUD_INSECURE_TLS', false),
       pollIntervalMs: envInt('NEXTCLOUD_POLL_INTERVAL_MS', 60_000),
     },
+    immich: {
+      enabled: immichEnabled,
+      baseUrl: immichBase,
+      apiKey: immichKey,
+      insecureTls: envBool('IMMICH_INSECURE_TLS', false),
+      pollIntervalMs: envInt('IMMICH_POLL_INTERVAL_MS', 60_000),
+    },
   };
 
   // eslint-disable-next-line no-console
@@ -158,7 +190,8 @@ export function loadConfig(): AppConfig {
       `insecureTls=${cfg.proxmox.insecureTls} ` +
       `unas=${cfg.unas.enabled ? `${cfg.unas.user}@${cfg.unas.host}:${cfg.unas.port}` : 'disabled'} ` +
       `portainer=${cfg.portainer.enabled ? cfg.portainer.baseUrl : 'disabled'} ` +
-      `nextcloud=${cfg.nextcloud.enabled ? cfg.nextcloud.baseUrl : 'disabled'}`,
+      `nextcloud=${cfg.nextcloud.enabled ? cfg.nextcloud.baseUrl : 'disabled'} ` +
+      `immich=${cfg.immich.enabled ? cfg.immich.baseUrl : 'disabled'}`,
   );
 
   return cfg;

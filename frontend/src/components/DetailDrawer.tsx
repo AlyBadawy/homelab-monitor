@@ -52,11 +52,14 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
   const isUnas = target.kind === 'unas';
   const isService = target.kind === 'service';
   const isNextcloud = target.kind === 'nextcloud';
+  const isImmich = target.kind === 'immich';
   const hasStoragePools = isHost || isUnas;
-  // Nextcloud tiles report null for net rates, so suppress the net chart
-  // even though the fields technically exist as undefined on the payload.
+  // Nextcloud / Immich tiles don't report net rates, so suppress the net
+  // chart even though the fields technically exist as undefined on the
+  // payload.
   const hasNet =
     !isNextcloud &&
+    !isImmich &&
     target.netInBps !== undefined &&
     target.netOutBps !== undefined;
 
@@ -129,7 +132,7 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
             </div>
           )}
 
-          {!isService && !isNextcloud && (
+          {!isService && !isNextcloud && !isImmich && (
             <>
               <HistoryChart
                 title="CPU"
@@ -222,6 +225,71 @@ export function DetailDrawer({ target, onClose }: DetailDrawerProps) {
                     key: 'files_count',
                     label: 'Files',
                     points: series.files_count ?? [],
+                    stroke: '#f59e0b',
+                    fill: 'rgba(245, 158, 11, 0.10)',
+                    format: (v) => Math.round(v).toLocaleString(),
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {isImmich && (
+            <>
+              <HistoryChart
+                title="Photos"
+                hint="total photos · 24h"
+                baselineZero={false}
+                series={[
+                  {
+                    key: 'photos_total',
+                    label: 'Photos',
+                    points: series.photos_total ?? [],
+                    stroke: '#22d3ee',
+                    fill: 'rgba(34, 211, 238, 0.10)',
+                    format: (v) => Math.round(v).toLocaleString(),
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Videos"
+                hint="total videos · 24h"
+                baselineZero={false}
+                series={[
+                  {
+                    key: 'videos_total',
+                    label: 'Videos',
+                    points: series.videos_total ?? [],
+                    stroke: '#34d399',
+                    fill: 'rgba(52, 211, 153, 0.10)',
+                    format: (v) => Math.round(v).toLocaleString(),
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Library Size"
+                hint="bytes · 24h"
+                baselineZero={false}
+                series={[
+                  {
+                    key: 'library_bytes',
+                    label: 'Library',
+                    points: series.library_bytes ?? [],
+                    stroke: '#a78bfa',
+                    fill: 'rgba(167, 139, 250, 0.10)',
+                    format: (v) => fmtBytes(v),
+                  },
+                ]}
+              />
+              <HistoryChart
+                title="Jobs Backlog"
+                hint="active + waiting · 24h"
+                baselineZero
+                series={[
+                  {
+                    key: 'jobs_backlog',
+                    label: 'Backlog',
+                    points: series.jobs_backlog ?? [],
                     stroke: '#f59e0b',
                     fill: 'rgba(245, 158, 11, 0.10)',
                     format: (v) => Math.round(v).toLocaleString(),
@@ -349,6 +417,11 @@ function computeMetricsForTarget(target: TargetSummary): string[] {
       'storage_free_bytes',
       'files_count',
     ];
+  }
+  if (target.kind === 'immich') {
+    // Immich records library totals + aggregate job backlog. Per-queue
+    // counts aren't charted here — the card's live grid tells that story.
+    return ['photos_total', 'videos_total', 'library_bytes', 'jobs_backlog'];
   }
   const base = ['cpu_pct', 'mem_pct'];
   if (target.kind === 'vm' || target.kind === 'container') {

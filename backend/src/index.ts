@@ -9,6 +9,7 @@ import { ProxmoxPoller } from './proxmox/poller';
 import { UnasPoller } from './unas/poller';
 import { PortainerPoller } from './portainer/poller';
 import { NextcloudPoller } from './nextcloud/poller';
+import { ImmichPoller } from './immich/poller';
 import { ServiceHealthPoller } from './services/poller';
 import { listChecks } from './services/repo';
 
@@ -30,6 +31,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
     unas: cfg.unas.enabled ? 'enabled' : 'disabled',
     portainer: cfg.portainer.enabled ? 'enabled' : 'disabled',
     nextcloud: cfg.nextcloud.enabled ? 'enabled' : 'disabled',
+    immich: cfg.immich.enabled ? 'enabled' : 'disabled',
   });
 });
 
@@ -89,6 +91,19 @@ if (cfg.nextcloud.enabled) {
   );
 }
 
+let immichPoller: ImmichPoller | null = null;
+if (cfg.immich.enabled) {
+  immichPoller = new ImmichPoller(cfg);
+  immichPoller.start();
+  // eslint-disable-next-line no-console
+  console.log('[homelab-monitor] immich poller started');
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[homelab-monitor] immich disabled (missing IMMICH_BASE_URL/IMMICH_API_KEY)',
+  );
+}
+
 // Service health poller always runs; if the DB has no checks, it no-ops.
 const serviceHealthPoller = new ServiceHealthPoller(cfg);
 serviceHealthPoller.start();
@@ -109,6 +124,7 @@ function shutdown(signal: string): void {
   unasPoller?.stop();
   portainerPoller?.stop();
   nextcloudPoller?.stop();
+  immichPoller?.stop();
   serviceHealthPoller.stop();
   server.close(() => {
     closeDb();

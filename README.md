@@ -2,7 +2,7 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: v0.11.0 — Nextcloud serverinfo
+## Current status: v0.12.0 — Immich library & jobs
 
 The dashboard now shows live data for:
 
@@ -11,10 +11,11 @@ The dashboard now shows live data for:
 - **Unifi UNAS Pro** (over SSH) — CPU, memory, uptime, **CPU temperature (24h sparkline)**, **storage pools with RAID health + nested share list**, and **per-drive SMART + temperature** (also with per-drive 24h temperature sparkline).
 - **Docker containers (via Portainer)** — one card per running container with CPU, memory, uptime, and live network ↓/↑ rate. Containers are **grouped into sections by compose/swarm stack** (from `com.docker.compose.project` / `com.docker.stack.namespace`); containers started with plain `docker run` fall into a final "Unstacked" section. Each Portainer-managed endpoint (standalone Docker, agent, Swarm) is polled individually.
 - **Docker networks & volumes** — a "Docker Resources" section with one pair of cards per endpoint. The **Networks** card lists driver, scope, subnet/gateway, internal flag, and live attached-container count (derived from container inspects, so it only counts running containers). The **Volumes** card lists driver, stack, mount path, size, and reference count — with orphans (refCount = 0) dimmed under a divider so "safe to prune" jumps out. Sizes come from `/system/df` which runs on its own slower interval (default 60s) so the fast tick stays fast even on hosts with many volumes.
-- **Nextcloud** — an "Applications" section with a dedicated Nextcloud card: **storage free**, **file count**, **active users (5m / 1h)**, plus a secondary row of **total users**, **shares**, **apps-with-updates** (amber-tinted when > 0), **version**, and **uptime**. Each primary chip has its own 24h sparkline; the drawer adds full 24h charts for active-users (5m / 1h / 24h overlaid), storage free, and total files. Powered by Nextcloud's monitoring token against `/ocs/v2.php/apps/serverinfo/api/v1/info` — no user login required, purely read-only.
+- **Nextcloud** — an "Applications" tile with a dedicated Nextcloud card: **storage free**, **file count**, **active users (5m / 1h)**, plus a secondary row of **total users**, **shares**, **apps-with-updates** (amber-tinted when > 0), **version**, and **uptime**. Each primary chip has its own 24h sparkline; the drawer adds full 24h charts for active-users (5m / 1h / 24h overlaid), storage free, and total files. Powered by Nextcloud's monitoring token against `/ocs/v2.php/apps/serverinfo/api/v1/info` — no user login required, purely read-only.
+- **Immich** — an "Applications" tile with a dedicated Immich card: **total photos**, **total videos**, **library bytes**, **registered users**, a **top-5 per-user usage table**, and a **live job-queue grid** that shows every BullMQ queue with its active / waiting / failed counts. The header carries a **jobs-backlog chip** that tints amber when anything is queued and rose when any queue has failures. Each queue chip follows the same rule — rose wins over amber wins over muted — so a single glance tells you whether Immich's background processing is healthy. The drawer adds 24h charts for photos, videos, library bytes, and the aggregate backlog. Powered by Immich's admin API (`/api/server/statistics` + `/api/jobs`), read-only.
 - **HTTP service checks** — add arbitrary URLs in the Services card to monitor latency, status code, and 24h availability strip. CRUD lives directly in the UI.
 
-Data is polled every 10 seconds (60s for Nextcloud — the serverinfo call is heavier) and 24 hours of samples are persisted to SQLite. Every tile has a 24h drawer with per-metric charts.
+Data is polled every 10 seconds (60s for Nextcloud + Immich — those calls are heavier) and 24 hours of samples are persisted to SQLite. Every tile has a 24h drawer with per-metric charts.
 
 ### Known limitation: QEMU disk usage
 
@@ -24,7 +25,7 @@ LXC containers don't need this — their Disk value is already real.
 
 Docker containers do not surface a rootfs usage % via the stats API, so the Disk bar is hidden on Docker cards by design.
 
-Still to come: Immich (v0.12) and Postgres (v0.13) app-level metrics.
+Still to come: Postgres (v0.13) app-level metrics.
 
 ## Stack
 
@@ -69,6 +70,10 @@ Optional env vars:
 | `NEXTCLOUD_TOKEN`            | —       | Monitoring token from Settings → Administration → Monitoring → *Metrics token*. |
 | `NEXTCLOUD_INSECURE_TLS`     | `false` | Flip to `true` if Nextcloud serves a self-signed cert. |
 | `NEXTCLOUD_POLL_INTERVAL_MS` | `60000` | Serverinfo walks the installed-apps list; 60s is a healthy default on small-to-medium instances. |
+| `IMMICH_BASE_URL`            | —       | e.g. `https://immich.example.com`, no trailing slash. Enables the Immich tile. |
+| `IMMICH_API_KEY`             | —       | API key minted under Account → API keys with the `admin` permission set (required for `/api/server/statistics` and `/api/jobs`). |
+| `IMMICH_INSECURE_TLS`        | `false` | Flip to `true` if Immich serves a self-signed cert. |
+| `IMMICH_POLL_INTERVAL_MS`    | `60000` | `/api/server/statistics` walks every user — 60s is a safe default on medium instances; raise on installs with thousands of users. |
 
 Each poller is optional. If its required env vars are missing, it's disabled at startup with a warning; the other pollers keep running. Any live poller error shows up as an amber banner in the UI with the exact message.
 
@@ -138,7 +143,7 @@ If Proxmox polling fails you'll see an amber banner with the exact error message
 
 | Method | Path                                | Purpose |
 | ------ | ----------------------------------- | ------- |
-| GET    | `/api/health`                       | Liveness + per-poller enabled flags (proxmox, unas, portainer, nextcloud) |
+| GET    | `/api/health`                       | Liveness + per-poller enabled flags (proxmox, unas, portainer, nextcloud, immich) |
 | GET    | `/api/stats/summary`                | All target tiles + last per-poller error |
 | GET    | `/api/stats/history/:target?metrics=a,b` | 24h sample history (batched, server-downsampled) |
 | GET    | `/api/services`                     | List configured HTTP checks |
@@ -157,6 +162,7 @@ Metrics recorded per target today:
 - `net_in_bps`, `net_out_bps` — for VMs, LXCs, and Docker containers
 - `http_up`, `http_latency_ms` — for configured HTTP service checks
 - `active_users_5m`, `active_users_1h`, `active_users_24h`, `storage_free_bytes`, `files_count` — for the Nextcloud tile
+- `photos_total`, `videos_total`, `library_bytes`, `jobs_backlog` — for the Immich tile
 
 ## Data model
 
@@ -187,6 +193,7 @@ SQLite file lives on the `backend_data` docker volume (`/data/monitor.db` inside
 | Docker container  | `docker-<endpointId>-<first12charsOfId>`   | `docker-1-a3f90b21cc47` |
 | HTTP service      | `service-<uuid>`                           | `service-…` |
 | Nextcloud         | `app-nextcloud`                            | — (single-instance today) |
+| Immich            | `app-immich`                               | — (single-instance today) |
 
 ## Roadmap
 
@@ -195,7 +202,7 @@ SQLite file lives on the `backend_data` docker volume (`/data/monitor.db` inside
 3. ~~**Chunk 3** — Portainer integration: container-level CPU/mem/network/status~~
 4. **Chunk 4** — Postgres metrics: connections, db size, replication lag
 5. ~~**Chunk 5a** — Nextcloud serverinfo (storage, users, files, shares, app updates)~~
-6. **Chunk 5b** — Immich app-level stats (assets, library size, jobs)
+6. ~~**Chunk 5b** — Immich app-level stats (assets, library size, jobs)~~
 7. ~~**Chunk 6** — Unifi UNAS: capacity, temps, SMART, RAID health~~
 8. ~~**Chunk 7** — Sparkline + 24h history charts~~
 

@@ -92,6 +92,63 @@ export interface NextcloudDetails {
   appsWithUpdates: number | null;
 }
 
+/**
+ * Per-user row in the Immich card's top-5 table. Immich exposes a per-user
+ * breakdown via /api/server/statistics — we keep the shape small because
+ * every row is rendered as a table cell, not a chart.
+ */
+export interface ImmichUserUsage {
+  /** Display name / email; falls back to a truncated user id. */
+  label: string;
+  photos: number | null;
+  videos: number | null;
+  /** Bytes used by this user (photos + videos + sidecar). */
+  usageBytes: number | null;
+  /** Per-user quota ceiling in bytes, if one is set. */
+  quotaBytes: number | null;
+}
+
+/**
+ * One queue's snapshot in the Immich card's per-queue grid. We keep the
+ * three BullMQ counts that tell a useful story at a glance — the rest
+ * (`completed`, `delayed`) are interesting in metrics dashboards, not on
+ * a card.
+ */
+export interface ImmichJobQueue {
+  /** Queue name exactly as Immich reports it (e.g. `thumbnailGeneration`). */
+  name: string;
+  active: number;
+  waiting: number;
+  failed: number;
+  /** Queue was manually paused in Immich admin UI. */
+  paused: boolean;
+}
+
+/**
+ * Immich-specific detail payload — only populated on kind='immich'.
+ * Every top-level number is nullable so a stale server (missing fields)
+ * renders "—" rather than NaN.
+ */
+export interface ImmichDetails {
+  photosTotal: number | null;
+  videosTotal: number | null;
+  /** Total library bytes (photos + videos + sidecar). */
+  libraryBytes: number | null;
+  /** Separate breakdowns, if the server reported them. */
+  libraryPhotoBytes: number | null;
+  libraryVideoBytes: number | null;
+  /** Registered users across the instance. Derived from `usageByUser.length`. */
+  userCount: number | null;
+  /** Per-user breakdown, sorted by usage desc. */
+  users: ImmichUserUsage[];
+  /** Snapshot of every job queue reported by /api/jobs. */
+  jobs: ImmichJobQueue[];
+  /** Sum of (active + waiting) across every queue. Drives the header chip. */
+  jobsBacklog: number;
+  /** Sum of `failed` across every queue. Drives the rose warning banner. */
+  jobsFailed: number;
+}
+
 export interface TargetSummary {
   id: string;
   name: string;
@@ -124,6 +181,8 @@ export interface TargetSummary {
   stack?: string | null;
   /** Nextcloud rich details — only populated on kind='nextcloud'. */
   nextcloud?: NextcloudDetails;
+  /** Immich rich details — only populated on kind='immich'. */
+  immich?: ImmichDetails;
   updatedAt: number;
   error?: string;               // present when the last poll failed
 }
@@ -179,6 +238,7 @@ interface Snapshot {
   lastUnasError: string | null;
   lastPortainerError: string | null;
   lastNextcloudError: string | null;
+  lastImmichError: string | null;
   generatedAt: number;
 }
 
@@ -189,6 +249,7 @@ const snapshot: Snapshot = {
   lastUnasError: null,
   lastPortainerError: null,
   lastNextcloudError: null,
+  lastImmichError: null,
   generatedAt: 0,
 };
 
@@ -212,6 +273,7 @@ export function getSummary(): {
     unas: string | null;
     portainer: string | null;
     nextcloud: string | null;
+    immich: string | null;
   };
 } {
   return {
@@ -223,6 +285,7 @@ export function getSummary(): {
       unas: snapshot.lastUnasError,
       portainer: snapshot.lastPortainerError,
       nextcloud: snapshot.lastNextcloudError,
+      immich: snapshot.lastImmichError,
     },
   };
 }
@@ -253,5 +316,10 @@ export function setPortainerError(err: string | null): void {
 
 export function setNextcloudError(err: string | null): void {
   snapshot.lastNextcloudError = err;
+  snapshot.generatedAt = Date.now();
+}
+
+export function setImmichError(err: string | null): void {
+  snapshot.lastImmichError = err;
   snapshot.generatedAt = Date.now();
 }
