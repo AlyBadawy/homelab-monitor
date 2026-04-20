@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 import {
   Server,
   Cpu,
@@ -17,22 +17,22 @@ import {
   Image as ImageIcon,
   Expand,
   type LucideIcon,
-} from 'lucide-react';
-import type { TargetSummary, TargetKind } from '../lib/api';
-import { StatusPill } from './StatusPill';
-import { MetricBar } from './MetricBar';
-import { StoragePoolList } from './StoragePoolList';
-import { DrivesTable } from './DrivesTable';
-import { MiniStat } from './MiniStat';
-import { Sparkline } from './Sparkline';
-import { useHistory } from '../lib/useHistory';
-import { fmtRate, fmtUptime } from '../lib/format';
+} from "lucide-react";
+import type { TargetSummary, TargetKind } from "../lib/api";
+import { StatusPill } from "./StatusPill";
+import { MetricBar } from "./MetricBar";
+import { StoragePoolList } from "./StoragePoolList";
+import { DrivesTable } from "./DrivesTable";
+import { MiniStat } from "./MiniStat";
+import { Sparkline } from "./Sparkline";
+import { useHistory } from "../lib/useHistory";
+import { fmtRate, fmtUptime } from "../lib/format";
 
 const KIND_ICON: Record<TargetKind, LucideIcon> = {
-  'proxmox-host': Server,
+  "proxmox-host": Server,
   vm: Cpu,
   container: Box,
-  'docker-container': Box,
+  "docker-container": Box,
   database: Database,
   storage: HardDrive,
   unas: HardDriveDownload,
@@ -42,16 +42,16 @@ const KIND_ICON: Record<TargetKind, LucideIcon> = {
 };
 
 const KIND_LABEL: Record<TargetKind, string> = {
-  'proxmox-host': 'HYPERVISOR',
-  vm: 'VM',
-  container: 'CONTAINER',
-  'docker-container': 'DOCKER',
-  database: 'DATABASE',
-  storage: 'STORAGE',
-  unas: 'UNAS',
-  service: 'SERVICE',
-  nextcloud: 'NEXTCLOUD',
-  immich: 'IMMICH',
+  "proxmox-host": "HYPERVISOR",
+  vm: "VM",
+  container: "CONTAINER",
+  "docker-container": "DOCKER",
+  database: "DATABASE",
+  storage: "STORAGE",
+  unas: "UNAS",
+  service: "SERVICE",
+  nextcloud: "NEXTCLOUD",
+  immich: "IMMICH",
 };
 
 interface TargetCardProps {
@@ -62,37 +62,37 @@ interface TargetCardProps {
 
 export function TargetCard({ target, onSelect }: TargetCardProps) {
   const Icon = KIND_ICON[target.kind];
-  const isHost = target.kind === 'proxmox-host';
-  const isUnas = target.kind === 'unas';
-  const isService = target.kind === 'service';
-  const isDocker = target.kind === 'docker-container';
+  const isHost = target.kind === "proxmox-host";
+  const isUnas = target.kind === "unas";
+  const isService = target.kind === "service";
+  const isDocker = target.kind === "docker-container";
   const showMiniStats =
-    target.kind === 'vm' ||
-    target.kind === 'container' ||
-    target.kind === 'docker-container';
+    target.kind === "vm" ||
+    target.kind === "container" ||
+    target.kind === "docker-container";
 
   // Metrics we care about per-card — kept lean for the inline sparklines.
   // Disk is intentionally NOT fetched here for VMs/LXCs because (a) the disk
   // MetricBar is already a bar-graph and (b) it keeps the per-card request
   // small. The detail drawer fetches the full set.
   const metrics = useMemo(() => {
-    if (isService) return ['http_latency_ms'];
-    const m = ['cpu_pct', 'mem_pct'];
+    if (isService) return ["http_latency_ms"];
+    const m = ["cpu_pct", "mem_pct"];
     if (showMiniStats) {
-      m.push('net_in_bps', 'net_out_bps');
+      m.push("net_in_bps", "net_out_bps");
     }
     // Host-style cards (Proxmox/UNAS) also plot a 24h CPU temp sparkline
     // inside the CPU Temp MiniStat. Drivers of this extra history request:
     //   - UNAS:      cpu_temp_c recorded from /sys/class/thermal/*
     //   - Proxmox:   cpu_temp_c recorded from PVE's thermalstate field
     if (isHost || isUnas) {
-      m.push('cpu_temp_c');
+      m.push("cpu_temp_c");
     }
     return m;
   }, [showMiniStats, isService, isHost, isUnas]);
 
   const { series } = useHistory(target.id, metrics, {
-    points: 120,       // sparkline-sized
+    points: 120, // sparkline-sized
     refreshMs: 30_000, // history changes slowly, poll less often than summary
   });
 
@@ -118,20 +118,20 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
   return (
     <div
       className={`card group ${
-        clickable ? 'cursor-pointer focus-within:border-border-strong' : ''
+        clickable ? "cursor-pointer focus-within:border-border-strong" : ""
       }`}
       onClick={clickable ? handleOpen : undefined}
       onKeyDown={
         clickable
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 handleOpen();
               }
             }
           : undefined
       }
-      role={clickable ? 'button' : undefined}
+      role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `Open history for ${target.name}` : undefined}
     >
@@ -160,7 +160,7 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
       </div>
 
       {!isService && (
-        <div className="space-y-3">
+        <div className="space-y-3 flex items-center justify-between gap-3">
           <MetricBar
             label="CPU"
             value={target.cpuPct}
@@ -230,14 +230,15 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
                 icon={Archive}
                 label="Backups"
                 value={
-                  target.backupCount === null || target.backupCount === undefined
-                    ? '—'
+                  target.backupCount === null ||
+                  target.backupCount === undefined
+                    ? "—"
                     : String(target.backupCount)
                 }
                 tone={
                   target.backupCount && target.backupCount > 0
-                    ? 'muted'
-                    : 'amber'
+                    ? "muted"
+                    : "amber"
                 }
                 title="Backups found across all backup-content storages"
               />
@@ -303,20 +304,20 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
               label="CPU Temp"
               value={
                 target.cpuTempC === null || target.cpuTempC === undefined
-                  ? '—'
+                  ? "—"
                   : `${target.cpuTempC.toFixed(0)}°C`
               }
               tone={
                 target.cpuTempC && target.cpuTempC >= 75
-                  ? 'rose'
+                  ? "rose"
                   : target.cpuTempC && target.cpuTempC >= 65
-                    ? 'amber'
-                    : 'muted'
+                    ? "amber"
+                    : "muted"
               }
               title={
                 isUnas
-                  ? 'Max temperature across thermal zones'
-                  : 'Max CPU-package/core temperature from PVE sensors'
+                  ? "Max temperature across thermal zones"
+                  : "Max CPU-package/core temperature from PVE sensors"
               }
               sparklinePoints={cpuTempPoints}
               sparklineAriaLabel="CPU temperature 24h trend"
@@ -379,11 +380,13 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
 
 /* ---------------- service kind ---------------- */
 
-function latencyTone(ms: number | null | undefined): 'muted' | 'amber' | 'rose' {
-  if (ms === null || ms === undefined) return 'muted';
-  if (ms >= 2000) return 'rose';
-  if (ms >= 750) return 'amber';
-  return 'muted';
+function latencyTone(
+  ms: number | null | undefined,
+): "muted" | "amber" | "rose" {
+  if (ms === null || ms === undefined) return "muted";
+  if (ms >= 2000) return "rose";
+  if (ms >= 750) return "amber";
+  return "muted";
 }
 
 interface ServiceBodyProps {
@@ -408,20 +411,26 @@ function ServiceBody({ target, latencyPoints }: ServiceBodyProps) {
         <MiniStat
           icon={Gauge}
           label="Latency"
-          value={latency === null || latency === undefined ? '—' : `${latency} ms`}
+          value={
+            latency === null || latency === undefined ? "—" : `${latency} ms`
+          }
           tone={latencyTone(latency)}
           title="Wall-clock time of the last GET"
         />
         <MiniStat
           icon={Globe}
           label="HTTP"
-          value={statusCode === null || statusCode === undefined ? '—' : String(statusCode)}
+          value={
+            statusCode === null || statusCode === undefined
+              ? "—"
+              : String(statusCode)
+          }
           tone={
             statusCode === null || statusCode === undefined
-              ? 'rose'
+              ? "rose"
               : statusCode >= 200 && statusCode < 300
-                ? 'emerald'
-                : 'rose'
+                ? "emerald"
+                : "rose"
           }
           title="Last response status code"
         />

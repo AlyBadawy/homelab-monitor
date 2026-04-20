@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: homelab-monitor-backend:0.13.0
+    image: homelab-monitor-backend:0.13.1
     container_name: homelab-monitor-backend
     restart: unless-stopped
     environment:
@@ -116,7 +116,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: homelab-monitor-frontend:0.13.0
+    image: homelab-monitor-frontend:0.13.1
     container_name: homelab-monitor-frontend
     restart: unless-stopped
     depends_on:

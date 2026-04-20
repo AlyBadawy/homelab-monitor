@@ -2,7 +2,7 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: v0.13.0 — sectioned layout
+## Current status: v0.13.1 — sectioned layout
 
 The homepage is now organised into a fixed sequence of sections (each with its own TypeScript module under `frontend/src/sections/`):
 
@@ -31,7 +31,7 @@ Data is polled every 10 seconds (60s for Nextcloud + Immich — those calls are 
 
 ### Known limitation: QEMU disk usage
 
-For QEMU VMs, the dashboard shows "—" for Disk with the hint *"guest agent not reporting"*. That's intentional — Proxmox's `/cluster/resources` only knows actual in-VM filesystem usage when the **qemu-guest-agent** is installed inside each VM. Install it (`apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` on Debian/Ubuntu, `dnf install qemu-guest-agent` on RHEL) and enable it on the VM's Options tab in Proxmox. A follow-up chunk will wire up `/agent/get-fsinfo` once the agent is in place on all your VMs.
+For QEMU VMs, the dashboard shows "—" for Disk with the hint _"guest agent not reporting"_. That's intentional — Proxmox's `/cluster/resources` only knows actual in-VM filesystem usage when the **qemu-guest-agent** is installed inside each VM. Install it (`apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` on Debian/Ubuntu, `dnf install qemu-guest-agent` on RHEL) and enable it on the VM's Options tab in Proxmox. A follow-up chunk will wire up `/agent/get-fsinfo` once the agent is in place on all your VMs.
 
 LXC containers don't need this — their Disk value is already real.
 
@@ -41,12 +41,12 @@ Still to come: Postgres app-level metrics; real UniFi / UPS / Backups pollers to
 
 ## Stack
 
-| Layer    | Choice |
-| -------- | ------ |
-| Frontend | React 18 + TypeScript + Vite + Tailwind |
+| Layer    | Choice                                                   |
+| -------- | -------------------------------------------------------- |
+| Frontend | React 18 + TypeScript + Vite + Tailwind                  |
 | Backend  | Node 20 + TypeScript + Express + better-sqlite3 + undici |
-| Storage  | SQLite file — 24h rolling history |
-| Deploy   | Two containers via `docker-compose` (nginx + node) |
+| Storage  | SQLite file — 24h rolling history                        |
+| Deploy   | Two containers via `docker-compose` (nginx + node)       |
 
 ## Configuration (docker-compose.yml)
 
@@ -54,38 +54,38 @@ All config is inline in `docker-compose.yml` under the `backend` service:
 
 ```yaml
 environment:
-  PROXMOX_BASE_URL:     "https://proxmox.in.alybadawy.com"
-  PROXMOX_TOKEN_ID:     "monitor@pve!dashboard"
+  PROXMOX_BASE_URL: "https://proxmox.in.alybadawy.com"
+  PROXMOX_TOKEN_ID: "monitor@pve!dashboard"
   PROXMOX_TOKEN_SECRET: "…rotate after first run…"
-  PROXMOX_INSECURE_TLS: "false"     # flip to "true" if hitting a self-signed cert directly
-  POLL_INTERVAL_MS:     "10000"
+  PROXMOX_INSECURE_TLS: "false" # flip to "true" if hitting a self-signed cert directly
+  POLL_INTERVAL_MS: "10000"
 ```
 
 Optional env vars:
 
-| Var                          | Default | Notes |
-| ---------------------------- | ------- | ----- |
-| `PORT`                       | `4000`  | Backend listen port (inside the container) |
-| `DATA_DIR`                   | `/data` | Where `monitor.db` is written |
-| `POLL_INTERVAL_MS`           | `10000` | How often each poller runs |
-| `HISTORY_RETENTION_MS`       | `86400000` | 24h. Samples older than this are pruned every 5 min |
-| `PROXMOX_INSECURE_TLS`       | `false` | Skip TLS verification — needed if hitting PVE's self-signed cert directly |
-| `UNAS_HOST` / `UNAS_USER`    | —       | SSH host + user. When both (plus a credential) are set, the UNAS poller starts. |
-| `UNAS_SSH_KEY_PATH`          | —       | Path to the read-only SSH key inside the container (mounted from `./secrets`). |
-| `UNAS_PASSWORD`              | —       | Password fallback if no key is mounted. |
-| `PORTAINER_BASE_URL`         | —       | e.g. `https://portainer.in.example.com` — no trailing slash. |
-| `PORTAINER_API_KEY`          | —       | Read-only API token (User settings → Access tokens in Portainer). |
-| `PORTAINER_INSECURE_TLS`     | `false` | Flip to `true` if Portainer serves a self-signed cert. |
-| `PORTAINER_POLL_INTERVAL_MS` | inherits `POLL_INTERVAL_MS` | Docker stats are heavier — bump to 15–30s if your host is busy. |
-| `PORTAINER_DF_INTERVAL_MS`   | `60000` | How often to refresh volume sizes via `/system/df` (the heavy call). Raise on hosts with many large volumes. |
-| `NEXTCLOUD_BASE_URL`         | —       | e.g. `https://nextcloud.example.com`, no trailing slash. Enables the Nextcloud tile. |
-| `NEXTCLOUD_TOKEN`            | —       | Monitoring token from Settings → Administration → Monitoring → *Metrics token*. |
-| `NEXTCLOUD_INSECURE_TLS`     | `false` | Flip to `true` if Nextcloud serves a self-signed cert. |
-| `NEXTCLOUD_POLL_INTERVAL_MS` | `60000` | Serverinfo walks the installed-apps list; 60s is a healthy default on small-to-medium instances. |
-| `IMMICH_BASE_URL`            | —       | e.g. `https://immich.example.com`, no trailing slash. Enables the Immich tile. |
-| `IMMICH_API_KEY`             | —       | API key minted under Account → API keys with the `admin` permission set (required for `/api/server/statistics` and `/api/jobs`). |
-| `IMMICH_INSECURE_TLS`        | `false` | Flip to `true` if Immich serves a self-signed cert. |
-| `IMMICH_POLL_INTERVAL_MS`    | `60000` | `/api/server/statistics` walks every user — 60s is a safe default on medium instances; raise on installs with thousands of users. |
+| Var                          | Default                     | Notes                                                                                                                             |
+| ---------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                       | `4000`                      | Backend listen port (inside the container)                                                                                        |
+| `DATA_DIR`                   | `/data`                     | Where `monitor.db` is written                                                                                                     |
+| `POLL_INTERVAL_MS`           | `10000`                     | How often each poller runs                                                                                                        |
+| `HISTORY_RETENTION_MS`       | `86400000`                  | 24h. Samples older than this are pruned every 5 min                                                                               |
+| `PROXMOX_INSECURE_TLS`       | `false`                     | Skip TLS verification — needed if hitting PVE's self-signed cert directly                                                         |
+| `UNAS_HOST` / `UNAS_USER`    | —                           | SSH host + user. When both (plus a credential) are set, the UNAS poller starts.                                                   |
+| `UNAS_SSH_KEY_PATH`          | —                           | Path to the read-only SSH key inside the container (mounted from `./secrets`).                                                    |
+| `UNAS_PASSWORD`              | —                           | Password fallback if no key is mounted.                                                                                           |
+| `PORTAINER_BASE_URL`         | —                           | e.g. `https://portainer.in.example.com` — no trailing slash.                                                                      |
+| `PORTAINER_API_KEY`          | —                           | Read-only API token (User settings → Access tokens in Portainer).                                                                 |
+| `PORTAINER_INSECURE_TLS`     | `false`                     | Flip to `true` if Portainer serves a self-signed cert.                                                                            |
+| `PORTAINER_POLL_INTERVAL_MS` | inherits `POLL_INTERVAL_MS` | Docker stats are heavier — bump to 15–30s if your host is busy.                                                                   |
+| `PORTAINER_DF_INTERVAL_MS`   | `60000`                     | How often to refresh volume sizes via `/system/df` (the heavy call). Raise on hosts with many large volumes.                      |
+| `NEXTCLOUD_BASE_URL`         | —                           | e.g. `https://nextcloud.example.com`, no trailing slash. Enables the Nextcloud tile.                                              |
+| `NEXTCLOUD_TOKEN`            | —                           | Monitoring token from Settings → Administration → Monitoring → _Metrics token_.                                                   |
+| `NEXTCLOUD_INSECURE_TLS`     | `false`                     | Flip to `true` if Nextcloud serves a self-signed cert.                                                                            |
+| `NEXTCLOUD_POLL_INTERVAL_MS` | `60000`                     | Serverinfo walks the installed-apps list; 60s is a healthy default on small-to-medium instances.                                  |
+| `IMMICH_BASE_URL`            | —                           | e.g. `https://immich.example.com`, no trailing slash. Enables the Immich tile.                                                    |
+| `IMMICH_API_KEY`             | —                           | API key minted under Account → API keys with the `admin` permission set (required for `/api/server/statistics` and `/api/jobs`).  |
+| `IMMICH_INSECURE_TLS`        | `false`                     | Flip to `true` if Immich serves a self-signed cert.                                                                               |
+| `IMMICH_POLL_INTERVAL_MS`    | `60000`                     | `/api/server/statistics` walks every user — 60s is a safe default on medium instances; raise on installs with thousands of users. |
 
 Each poller is optional. If its required env vars are missing, it's disabled at startup with a warning; the other pollers keep running. Any live poller error shows up as an amber banner in the UI with the exact message.
 
@@ -94,8 +94,8 @@ Each poller is optional. If its required env vars are missing, it's disabled at 
 Create a dedicated user + token in Proxmox (Datacenter → Permissions):
 
 1. Add a user `monitor@pve` (any password — it's not used by the token)
-2. Add a user permission at path `/` with role `PVEAuditor` (read-only) and *Propagate* checked
-3. Add an API token for that user — un-check *Privilege Separation* so it inherits the user's permissions
+2. Add a user permission at path `/` with role `PVEAuditor` (read-only) and _Propagate_ checked
+3. Add an API token for that user — un-check _Privilege Separation_ so it inherits the user's permissions
 4. Copy the shown secret once; paste it into `PROXMOX_TOKEN_SECRET`
 
 ## Run
@@ -103,30 +103,30 @@ Create a dedicated user + token in Proxmox (Datacenter → Permissions):
 ### Option A — Portainer (recommended if you already run Portainer)
 
 1. **Create the network first**
-   Portainer → *Networks* → *Add network*. Name it exactly `homelab-monitor`, driver `bridge`, leave other defaults. The compose file references this as an external network.
+   Portainer → _Networks_ → _Add network_. Name it exactly `homelab-monitor`, driver `bridge`, leave other defaults. The compose file references this as an external network.
 
 2. **Push this project to a git repo** (GitHub, Gitea, GitLab, etc). Do **not** commit real Proxmox credentials — `docker-compose.yml` reads them from stack env vars.
 
 3. **Create the stack**
-   Portainer → *Stacks* → *Add stack*. Name: `homelab-monitor`.
+   Portainer → _Stacks_ → _Add stack_. Name: `homelab-monitor`.
    - Build method: **Repository**
    - Repository URL: your git URL
    - Reference: `refs/heads/main`
    - Compose path: `docker-compose.yml`
-   - (Private repo: set *Authentication* ON and paste a GitHub Personal Access Token)
+   - (Private repo: set _Authentication_ ON and paste a GitHub Personal Access Token)
 
-4. **Set environment variables** (same screen, *Environment variables* section — this is where the real token lives):
+4. **Set environment variables** (same screen, _Environment variables_ section — this is where the real token lives):
    - `PROXMOX_TOKEN_ID` = `monitor@pve!dashboard`
    - `PROXMOX_TOKEN_SECRET` = the new secret (rotate the old one first!)
    - `PROXMOX_BASE_URL` = `https://proxmox.in.alybadawy.com` (optional; this is the default)
    - `PROXMOX_INSECURE_TLS` = `false` (flip to `true` only if you point at the direct PVE IP)
    - `FRONTEND_PORT` = the host port you want (e.g. `8080`)
 
-5. **Deploy** → *Deploy the stack*. Portainer clones the repo, builds both images on the docker host, pulls them up, and attaches them to the pre-created `homelab-monitor` network.
+5. **Deploy** → _Deploy the stack_. Portainer clones the repo, builds both images on the docker host, pulls them up, and attaches them to the pre-created `homelab-monitor` network.
 
 6. Open `http://<docker-vm-ip>:<FRONTEND_PORT>`.
 
-To update later: Stack → *Pull and redeploy*. Or configure a webhook in Portainer and push `main` to redeploy automatically.
+To update later: Stack → _Pull and redeploy_. Or configure a webhook in Portainer and push `main` to redeploy automatically.
 
 ### Option B — docker compose directly on the VM
 
@@ -153,15 +153,15 @@ If Proxmox polling fails you'll see an amber banner with the exact error message
 
 ## Endpoints
 
-| Method | Path                                | Purpose |
-| ------ | ----------------------------------- | ------- |
-| GET    | `/api/health`                       | Liveness + per-poller enabled flags (proxmox, unas, portainer, nextcloud, immich) |
-| GET    | `/api/stats/summary`                | All target tiles + last per-poller error |
-| GET    | `/api/stats/history/:target?metrics=a,b` | 24h sample history (batched, server-downsampled) |
-| GET    | `/api/services`                     | List configured HTTP checks |
-| POST   | `/api/services`                     | Create a new HTTP check |
-| PATCH  | `/api/services/:id`                 | Update an existing check |
-| DELETE | `/api/services/:id`                 | Remove a check |
+| Method | Path                                     | Purpose                                                                           |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| GET    | `/api/health`                            | Liveness + per-poller enabled flags (proxmox, unas, portainer, nextcloud, immich) |
+| GET    | `/api/stats/summary`                     | All target tiles + last per-poller error                                          |
+| GET    | `/api/stats/history/:target?metrics=a,b` | 24h sample history (batched, server-downsampled)                                  |
+| GET    | `/api/services`                          | List configured HTTP checks                                                       |
+| POST   | `/api/services`                          | Create a new HTTP check                                                           |
+| PATCH  | `/api/services/:id`                      | Update an existing check                                                          |
+| DELETE | `/api/services/:id`                      | Remove a check                                                                    |
 
 Metrics recorded per target today:
 
@@ -195,17 +195,17 @@ SQLite file lives on the `backend_data` docker volume (`/data/monitor.db` inside
 
 ## Target ID scheme
 
-| Kind              | ID format                                  | Example |
-| ----------------- | ------------------------------------------ | ------- |
-| Proxmox host      | `proxmox-host`                             | (first / only node) |
-| Extra PVE nodes   | `proxmox-host-<node>`                      | `proxmox-host-pve2` |
-| Proxmox VM        | `qemu-<vmid>`                              | `qemu-101` |
-| Proxmox LXC       | `lxc-<vmid>`                               | `lxc-200` |
-| UNAS              | `unas`                                     | — |
-| Docker container  | `docker-<endpointId>-<first12charsOfId>`   | `docker-1-a3f90b21cc47` |
-| HTTP service      | `service-<uuid>`                           | `service-…` |
-| Nextcloud         | `app-nextcloud`                            | — (single-instance today) |
-| Immich            | `app-immich`                               | — (single-instance today) |
+| Kind             | ID format                                | Example                   |
+| ---------------- | ---------------------------------------- | ------------------------- |
+| Proxmox host     | `proxmox-host`                           | (first / only node)       |
+| Extra PVE nodes  | `proxmox-host-<node>`                    | `proxmox-host-pve2`       |
+| Proxmox VM       | `qemu-<vmid>`                            | `qemu-101`                |
+| Proxmox LXC      | `lxc-<vmid>`                             | `lxc-200`                 |
+| UNAS             | `unas`                                   | —                         |
+| Docker container | `docker-<endpointId>-<first12charsOfId>` | `docker-1-a3f90b21cc47`   |
+| HTTP service     | `service-<uuid>`                         | `service-…`               |
+| Nextcloud        | `app-nextcloud`                          | — (single-instance today) |
+| Immich           | `app-immich`                             | — (single-instance today) |
 
 ## Roadmap
 

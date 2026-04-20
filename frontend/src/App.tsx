@@ -38,7 +38,7 @@ export default function App() {
   // Keep the drawer's target reference fresh on each poll tick (so the header
   // shows live status/uptime while the drawer is open).
   const selectedTarget = selectedId
-    ? targets.find((t) => t.id === selectedId) ?? null
+    ? (targets.find((t) => t.id === selectedId) ?? null)
     : null;
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -218,7 +218,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.13.0 · sectioned layout
+          v0.13.1 · sectioned layout
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}
