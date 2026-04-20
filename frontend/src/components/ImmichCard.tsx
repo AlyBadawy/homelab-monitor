@@ -236,7 +236,7 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-5">
             {im.jobs.map((q) => (
               <QueueChip key={q.name} queue={q} />
             ))}
