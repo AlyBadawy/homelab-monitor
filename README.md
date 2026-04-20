@@ -2,7 +2,19 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: v0.12.0 — Immich library & jobs
+## Current status: v0.13.0 — sectioned layout
+
+The homepage is now organised into a fixed sequence of sections (each with its own TypeScript module under `frontend/src/sections/`):
+
+1. **Status tiles** — a 12-slot rollup strip at the very top (6×2 on desktop, 2×6 on mobile). Slots cover Hypervisor, UNAS, Switch, Router, Nextcloud, Immich, Docker, Services, VMs, Databases, Backups, UPS. Integrations that aren't wired yet show as dimmed **TBD** tiles, so the grid shape never shifts.
+2. **UniFi Network** — placeholder card with router status, external IP, downlink / uplink throughput, 5 router ports, and 10 switch ports. Visual stub today; the UniFi poller will backfill the values.
+3. **UNAS** — full-row card with drives + storage pools.
+4. **Hypervisor** — full-row card with host metrics + a mini-grid of VM / LXC cards embedded inside.
+5. **Docker** — full-row card: per-endpoint networks + volumes on top, then per-stack subsections with two-line container rows (uptime / CPU / memory on line 1, net in / net out / 24h sparkline on line 2).
+6. **Services** — HTTP health checks table.
+7. **Databases** — placeholder.
+8. **Nextcloud** — full-row card.
+9. **Immich** — full-row card.
 
 The dashboard now shows live data for:
 
@@ -25,7 +37,7 @@ LXC containers don't need this — their Disk value is already real.
 
 Docker containers do not surface a rootfs usage % via the stats API, so the Disk bar is hidden on Docker cards by design.
 
-Still to come: Postgres (v0.13) app-level metrics.
+Still to come: Postgres app-level metrics; real UniFi / UPS / Backups pollers to fill the TBD tiles + UniFi card.
 
 ## Stack
 

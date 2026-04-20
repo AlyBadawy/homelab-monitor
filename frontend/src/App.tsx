@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Header } from "./components/Header";
-import { Section } from "./components/Section";
-import { CardRow } from "./components/CardRow";
-import { ServicesCard } from "./components/ServicesCard";
-import { TargetCard } from "./components/TargetCard";
 import { DetailDrawer } from "./components/DetailDrawer";
-import { NetworksCard } from "./components/NetworksCard";
-import { VolumesCard } from "./components/VolumesCard";
-import { NextcloudCard } from "./components/NextcloudCard";
-import { ImmichCard } from "./components/ImmichCard";
+import { StatusTilesSection } from "./sections/StatusTilesSection";
+import { UnifiSection } from "./sections/UnifiSection";
+import { UnasSection } from "./sections/UnasSection";
+import { HypervisorSection } from "./sections/HypervisorSection";
+import { DockerSection } from "./sections/DockerSection";
+import { ServicesSection } from "./sections/ServicesSection";
+import { DatabasesSection } from "./sections/DatabasesSection";
+import { NextcloudSection } from "./sections/NextcloudSection";
+import { ImmichSection } from "./sections/ImmichSection";
 import {
   fetchSummary,
   type DockerEndpointResources,
@@ -17,12 +18,11 @@ import {
   type TargetSummary,
 } from "./lib/api";
 
-/** Bucket label used for containers with no compose/swarm stack label. */
-const UNSTACKED_KEY = "__unstacked__";
-
 export default function App() {
   const [targets, setTargets] = useState<TargetSummary[]>([]);
-  const [dockerResources, setDockerResources] = useState<DockerEndpointResources[]>([]);
+  const [dockerResources, setDockerResources] = useState<
+    DockerEndpointResources[]
+  >([]);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -68,64 +68,59 @@ export default function App() {
     };
   }, [load]);
 
-  // Bucket targets by role for the layout:
-  //   Infrastructure row  = Proxmox host(s) + UNAS/storage devices.
-  //   VMs row             = VMs + LXCs (max 3 per row, fills full width).
-  //   Databases row       = DB targets (same rules as VMs).
-  //   Applications row    = Nextcloud / Immich / other first-class apps that
-  //                         each have their own bespoke card (not the
-  //                         generic TargetCard). Same max-3-per-row rules.
-  //   dockerStackGroups   = ordered groups of Docker containers keyed by
-  //                         their compose/swarm stack label — each rendered
-  //                         as its own Section. "Unstacked" comes last.
-  // Services are rendered separately via <ServicesCard>.
-  const { infra, vms, databases, applications, dockerStackGroups } = useMemo(() => {
-    const infra: TargetSummary[] = [];
+  // Bucket targets by role for the section layout. Each section owns its
+  // own rendering; App.tsx only routes the data in.
+  //   hosts      — proxmox-host(s)
+  //   vms        — VMs + LXCs (inside the Hypervisor card's mini-grid)
+  //   dockers    — docker-container targets (grouped by stack inside DockerSection)
+  //   unas       — unas + storage targets
+  //   databases  — database targets (placeholder today)
+  //   nextclouds — nextcloud targets
+  //   immichs    — immich targets
+  // `service` kind is intentionally omitted — ServicesCard reads it directly.
+  const buckets = useMemo(() => {
+    const hosts: TargetSummary[] = [];
     const vms: TargetSummary[] = [];
-    const databases: TargetSummary[] = [];
-    const applications: TargetSummary[] = [];
     const dockers: TargetSummary[] = [];
+    const unas: TargetSummary[] = [];
+    const databases: TargetSummary[] = [];
+    const nextclouds: TargetSummary[] = [];
+    const immichs: TargetSummary[] = [];
     for (const t of targets) {
-      if (t.kind === "proxmox-host" || t.kind === "unas" || t.kind === "storage") {
-        infra.push(t);
-      } else if (t.kind === "vm" || t.kind === "container") {
-        vms.push(t);
-      } else if (t.kind === "docker-container") {
-        dockers.push(t);
-      } else if (t.kind === "database") {
-        databases.push(t);
-      } else if (t.kind === "nextcloud" || t.kind === "immich") {
-        applications.push(t);
+      switch (t.kind) {
+        case "proxmox-host":
+          hosts.push(t);
+          break;
+        case "vm":
+        case "container":
+          vms.push(t);
+          break;
+        case "docker-container":
+          dockers.push(t);
+          break;
+        case "unas":
+        case "storage":
+          unas.push(t);
+          break;
+        case "database":
+          databases.push(t);
+          break;
+        case "nextcloud":
+          nextclouds.push(t);
+          break;
+        case "immich":
+          immichs.push(t);
+          break;
+        // service is handled inside ServicesCard
       }
-      // `service` kind is intentionally omitted — ServicesCard owns it.
     }
-    // Group dockers by stack label. Containers with no stack (plain `docker
-    // run`) land in an UNSTACKED bucket that's rendered last.
-    const stackMap = new Map<string, TargetSummary[]>();
-    for (const d of dockers) {
-      const key = d.stack ?? UNSTACKED_KEY;
-      const arr = stackMap.get(key);
-      if (arr) arr.push(d);
-      else stackMap.set(key, [d]);
-    }
-    // Sort containers within each stack: running first, then by name.
-    const sortContainers = (a: TargetSummary, b: TargetSummary) => {
+    vms.sort((a, b) => {
       if (a.status === b.status) return a.name.localeCompare(b.name);
       return a.status === "online" ? -1 : 1;
-    };
-    const dockerStackGroups = Array.from(stackMap.entries())
-      .map(([key, list]) => ({ key, items: [...list].sort(sortContainers) }))
-      .sort((a, b) => {
-        // Unstacked bucket always last; named stacks alphabetically.
-        if (a.key === UNSTACKED_KEY) return 1;
-        if (b.key === UNSTACKED_KEY) return -1;
-        return a.key.localeCompare(b.key);
-      });
-    // Applications are sorted by name for a stable order. They're first-class
-    // apps (Nextcloud, Immich) that each have their own card, so we don't do
-    // the online-first trick used for dockers.
-    applications.sort((a, b) => a.name.localeCompare(b.name));
-    return { infra, vms, databases, applications, dockerStackGroups };
+    });
+    nextclouds.sort((a, b) => a.name.localeCompare(b.name));
+    immichs.sort((a, b) => a.name.localeCompare(b.name));
+    return { hosts, vms, dockers, unas, databases, nextclouds, immichs };
   }, [targets]);
 
   const onSelect = (t: TargetSummary) => setSelectedId(t.id);
@@ -151,202 +146,51 @@ export default function App() {
           </div>
         )}
 
-        {apiErrors.proxmox && (
-          <div className="card border-accent-amber/40 bg-accent-amber/5">
-            <div className="flex items-center gap-2 card-title text-accent-amber">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Proxmox poller error
-            </div>
-            <p className="mt-2 font-mono text-sm text-text-muted break-all">
-              {apiErrors.proxmox}
-            </p>
-          </div>
-        )}
+        {/* Poller-level error banners — same UX as before; collected in one
+            block so App.tsx reads cleanly. */}
+        <PollerErrors errors={apiErrors} />
 
-        {apiErrors.unas && (
-          <div className="card border-accent-amber/40 bg-accent-amber/5">
-            <div className="flex items-center gap-2 card-title text-accent-amber">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              UNAS poller error
-            </div>
-            <p className="mt-2 font-mono text-sm text-text-muted break-all">
-              {apiErrors.unas}
-            </p>
-          </div>
-        )}
+        {/* 1) 12 rollup status tiles — always first, always present. Reads
+               directly from state, no extra fetches. */}
+        <StatusTilesSection
+          targets={targets}
+          dockerResources={dockerResources}
+          apiErrors={apiErrors}
+        />
 
-        {apiErrors.portainer && (
-          <div className="card border-accent-amber/40 bg-accent-amber/5">
-            <div className="flex items-center gap-2 card-title text-accent-amber">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Portainer poller error
-            </div>
-            <p className="mt-2 font-mono text-sm text-text-muted break-all">
-              {apiErrors.portainer}
-            </p>
-          </div>
-        )}
+        {/* 2) UniFi network overview — placeholder card. */}
+        <UnifiSection />
 
-        {apiErrors.nextcloud && (
-          <div className="card border-accent-amber/40 bg-accent-amber/5">
-            <div className="flex items-center gap-2 card-title text-accent-amber">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Nextcloud poller error
-            </div>
-            <p className="mt-2 font-mono text-sm text-text-muted break-all">
-              {apiErrors.nextcloud}
-            </p>
-          </div>
-        )}
+        {/* 3) UNAS — full row for the drives/pools tables. */}
+        <UnasSection items={buckets.unas} onSelect={onSelect} />
 
-        {apiErrors.immich && (
-          <div className="card border-accent-amber/40 bg-accent-amber/5">
-            <div className="flex items-center gap-2 card-title text-accent-amber">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Immich poller error
-            </div>
-            <p className="mt-2 font-mono text-sm text-text-muted break-all">
-              {apiErrors.immich}
-            </p>
-          </div>
-        )}
+        {/* 4) Hypervisor — full-row card with the host's metrics + a
+               mini-grid of VMs inside. */}
+        <HypervisorSection
+          hosts={buckets.hosts}
+          vms={buckets.vms}
+          onSelect={onSelect}
+        />
 
-        {/* 1) Services — always at the top. The card owns its own empty
-            state with an "Add service" CTA, so it renders even with no
-            checks yet. */}
-        <Section title="Services">
-          <ServicesCard targets={targets} />
-        </Section>
+        {/* 5) Docker — full-row card: networks + volumes on top, then
+               per-stack subsections with two-line container rows. */}
+        <DockerSection
+          containers={buckets.dockers}
+          dockerResources={dockerResources}
+          onSelect={onSelect}
+        />
 
-        {/* 2) Infrastructure — Proxmox host + UNAS side-by-side on md+,
-            stacked on mobile. Each card takes exactly half the row width
-            so the pair spans the same area as the Services card above. */}
-        {infra.length > 0 && (
-          <Section title="Infrastructure">
-            <CardRow
-              items={infra}
-              maxPerRow={2}
-              keyFor={(t) => t.id}
-              renderItem={(t) => (
-                <TargetCard target={t} onSelect={onSelect} />
-              )}
-            />
-          </Section>
-        )}
+        {/* 6) Services — HTTP health checks. Owns its own data + empty state. */}
+        <ServicesSection targets={targets} />
 
-        {/* 3) VMs & containers — up to 3 per row. Every row fills the full
-            services-row width: 1 VM = 100%, 2 = halves, 3 = thirds, 4 =
-            row of 3 + full-width row of 1, and so on. */}
-        {vms.length > 0 && (
-          <Section title="Virtual Machines & Containers">
-            <CardRow
-              items={vms}
-              maxPerRow={3}
-              keyFor={(t) => t.id}
-              renderItem={(t) => (
-                <TargetCard target={t} onSelect={onSelect} />
-              )}
-            />
-          </Section>
-        )}
+        {/* 7) Databases — placeholder card. */}
+        <DatabasesSection items={buckets.databases} onSelect={onSelect} />
 
-        {/* 4) Docker containers — one Section per compose stack. Within each
-            stack the card-row rules match the VMs section (3-up, last row
-            stretches). Unstacked (plain `docker run`) comes last so it
-            doesn't split up labelled stacks. */}
-        {dockerStackGroups.map((g) => {
-          const title =
-            g.key === UNSTACKED_KEY
-              ? "Docker · Unstacked"
-              : `Docker · ${g.key}`;
-          return (
-            <Section key={g.key} title={title}>
-              <CardRow
-                items={g.items}
-                maxPerRow={3}
-                keyFor={(t) => t.id}
-                renderItem={(t) => (
-                  <TargetCard target={t} onSelect={onSelect} />
-                )}
-              />
-            </Section>
-          );
-        })}
+        {/* 8) Nextcloud — full-row card. */}
+        <NextcloudSection items={buckets.nextclouds} onSelect={onSelect} />
 
-        {/* 4b) Docker Resources — networks + volumes per endpoint. One pair
-            of cards per Docker endpoint. Hidden until the first poll lands
-            so we don't flash empty cards. */}
-        {dockerResources.length > 0 && (
-          <Section title="Docker Resources">
-            <div className="space-y-4">
-              {dockerResources.map((res) => (
-                <CardRow
-                  key={res.endpointId}
-                  items={[
-                    { type: "net" as const, res },
-                    { type: "vol" as const, res },
-                  ]}
-                  maxPerRow={2}
-                  keyFor={(i) => `${res.endpointId}-${i.type}`}
-                  renderItem={(i) =>
-                    i.type === "net" ? (
-                      <NetworksCard
-                        endpointName={i.res.endpointName}
-                        networks={i.res.networks}
-                      />
-                    ) : (
-                      <VolumesCard
-                        endpointName={i.res.endpointName}
-                        volumes={i.res.volumes}
-                        sizesUpdatedAt={i.res.sizesUpdatedAt}
-                        dfError={i.res.dfError}
-                      />
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* 5) Applications — first-class self-hosted apps (Nextcloud,
-            Immich, …). Each kind gets its own bespoke card instead of the
-            generic TargetCard because the metrics that matter are
-            domain-specific (e.g. active users, file count, storage free). */}
-        {applications.length > 0 && (
-          <Section title="Applications">
-            <CardRow
-              items={applications}
-              maxPerRow={3}
-              keyFor={(t) => t.id}
-              renderItem={(t) => {
-                if (t.kind === "nextcloud") {
-                  return <NextcloudCard target={t} onSelect={onSelect} />;
-                }
-                if (t.kind === "immich") {
-                  return <ImmichCard target={t} onSelect={onSelect} />;
-                }
-                // Future kinds fall back to the generic card until we ship
-                // a bespoke one for them.
-                return <TargetCard target={t} onSelect={onSelect} />;
-              }}
-            />
-          </Section>
-        )}
-
-        {/* 6) Databases — same rules as VMs. */}
-        {databases.length > 0 && (
-          <Section title="Databases">
-            <CardRow
-              items={databases}
-              maxPerRow={3}
-              keyFor={(t) => t.id}
-              renderItem={(t) => (
-                <TargetCard target={t} onSelect={onSelect} />
-              )}
-            />
-          </Section>
-        )}
+        {/* 9) Immich — full-row card. */}
+        <ImmichSection items={buckets.immichs} onSelect={onSelect} />
 
         {targets.length === 0 && !fetchError && loading && (
           <div className="card text-center">
@@ -374,7 +218,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.12.1 · favicons & branding
+          v0.13.0 · sectioned layout
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}
@@ -388,6 +232,47 @@ export default function App() {
         target={selectedTarget}
         onClose={() => setSelectedId(null)}
       />
+    </div>
+  );
+}
+
+/* ---------------- poller error banners ---------------- */
+
+interface PollerErrorsProps {
+  errors: SummaryErrors;
+}
+
+/**
+ * Renders one amber banner per poller that errored on its last tick. Kept
+ * inline so App.tsx can stay focused on sectioning and so adding a new
+ * poller only means adding one more entry here.
+ */
+function PollerErrors({ errors }: PollerErrorsProps) {
+  const rows: Array<{ key: keyof SummaryErrors; label: string }> = [
+    { key: "proxmox", label: "Proxmox" },
+    { key: "unas", label: "UNAS" },
+    { key: "portainer", label: "Portainer" },
+    { key: "nextcloud", label: "Nextcloud" },
+    { key: "immich", label: "Immich" },
+  ];
+  const active = rows.filter((r) => !!errors[r.key]);
+  if (active.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {active.map(({ key, label }) => (
+        <div
+          key={key}
+          className="card border-accent-amber/40 bg-accent-amber/5"
+        >
+          <div className="flex items-center gap-2 card-title text-accent-amber">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {label} poller error
+          </div>
+          <p className="mt-2 font-mono text-sm text-text-muted break-all">
+            {errors[key]}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
