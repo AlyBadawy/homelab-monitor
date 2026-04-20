@@ -160,7 +160,7 @@ export function TargetCard({ target, onSelect }: TargetCardProps) {
       </div>
 
       {!isService && (
-        <div className="space-y-3 flex items-center justify-between gap-3">
+        <div className="space-y-3">
           <MetricBar
             label="CPU"
             value={target.cpuPct}

@@ -6,13 +6,13 @@ import {
   Expand,
   AlertTriangle,
   PauseCircle,
-} from 'lucide-react';
-import clsx from 'clsx';
-import type { ImmichJobQueue, TargetSummary } from '../lib/api';
-import { StatusPill } from './StatusPill';
-import { MiniStat } from './MiniStat';
-import { useHistory } from '../lib/useHistory';
-import { fmtBytes } from '../lib/format';
+} from "lucide-react";
+import clsx from "clsx";
+import type { ImmichJobQueue, TargetSummary } from "../lib/api";
+import { StatusPill } from "./StatusPill";
+import { MiniStat } from "./MiniStat";
+import { useHistory } from "../lib/useHistory";
+import { fmtBytes } from "../lib/format";
 
 interface ImmichCardProps {
   target: TargetSummary;
@@ -41,7 +41,7 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
   // the metrics recorded by ImmichPoller.recordHistory.
   const { series } = useHistory(
     target.id,
-    ['photos_total', 'videos_total', 'library_bytes', 'jobs_backlog'],
+    ["photos_total", "videos_total", "library_bytes", "jobs_backlog"],
     { points: 120, refreshMs: 30_000 },
   );
 
@@ -56,12 +56,12 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
   const jobsFailed = im?.jobsFailed ?? 0;
   // Header chip tone follows the same "keep the worst color" rule as the
   // queue grid: rose > amber > muted.
-  const backlogTone: 'rose' | 'amber' | 'muted' =
-    jobsFailed > 0 ? 'rose' : jobsBacklog > 0 ? 'amber' : 'muted';
+  const backlogTone: "rose" | "amber" | "muted" =
+    jobsFailed > 0 ? "rose" : jobsBacklog > 0 ? "amber" : "muted";
   const backlogToneClass: Record<typeof backlogTone, string> = {
-    rose: 'border-accent-rose/40 text-accent-rose bg-accent-rose/5',
-    amber: 'border-accent-amber/40 text-accent-amber bg-accent-amber/5',
-    muted: 'border-border text-text-muted bg-bg-700/50',
+    rose: "border-accent-rose/40 text-accent-rose bg-accent-rose/5",
+    amber: "border-accent-amber/40 text-accent-amber bg-accent-amber/5",
+    muted: "border-border text-text-muted bg-bg-700/50",
   };
 
   const topUsers = (im?.users ?? []).slice(0, 5);
@@ -69,20 +69,20 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
   return (
     <div
       className={`card group ${
-        clickable ? 'cursor-pointer focus-within:border-border-strong' : ''
+        clickable ? "cursor-pointer focus-within:border-border-strong" : ""
       }`}
       onClick={clickable ? handleOpen : undefined}
       onKeyDown={
         clickable
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 handleOpen();
               }
             }
           : undefined
       }
-      role={clickable ? 'button' : undefined}
+      role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `Open history for ${target.name}` : undefined}
     >
@@ -102,7 +102,7 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
         <div className="flex items-center gap-2">
           <span
             className={clsx(
-              'rounded border px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em]',
+              "rounded border px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em]",
               backlogToneClass[backlogTone],
             )}
             title={
@@ -180,7 +180,7 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
               Top Users
             </div>
             <div className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim">
-              {im?.userCount ? `${topUsers.length} / ${im.userCount}` : ''}
+              {im?.userCount ? `${topUsers.length} / ${im.userCount}` : ""}
             </div>
           </div>
           <table className="w-full font-mono text-[0.7rem]">
@@ -236,7 +236,7 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5 md:grid-cols-3">
             {im.jobs.map((q) => (
               <QueueChip key={q.name} queue={q} />
             ))}
@@ -267,25 +267,22 @@ interface QueueChipProps {
 function QueueChip({ queue }: QueueChipProps) {
   const failed = queue.failed;
   const busy = queue.active + queue.waiting;
-  const tone: 'rose' | 'amber' | 'muted' =
-    failed > 0 ? 'rose' : busy > 0 ? 'amber' : 'muted';
+  const tone: "rose" | "amber" | "muted" =
+    failed > 0 ? "rose" : busy > 0 ? "amber" : "muted";
 
   const toneClass: Record<typeof tone, string> = {
-    rose: 'border-accent-rose/40 bg-accent-rose/5',
-    amber: 'border-accent-amber/40 bg-accent-amber/5',
-    muted: 'border-border bg-bg-700/50',
+    rose: "border-accent-rose/40 bg-accent-rose/5",
+    amber: "border-accent-amber/40 bg-accent-amber/5",
+    muted: "border-border bg-bg-700/50",
   };
 
   return (
     <div
-      className={clsx(
-        'rounded-md border px-2 py-1.5',
-        toneClass[tone],
-      )}
+      className={clsx("rounded-md border px-2 py-1.5", toneClass[tone])}
       title={
         `${queue.name}\n` +
         `active ${queue.active} · waiting ${queue.waiting} · failed ${queue.failed}` +
-        (queue.paused ? ' · paused' : '')
+        (queue.paused ? " · paused" : "")
       }
     >
       <div className="flex items-center justify-between gap-1">
@@ -305,7 +302,7 @@ function QueueChip({ queue }: QueueChipProps) {
       <div className="mt-0.5 flex items-center gap-2 font-mono text-[0.65rem]">
         <span
           className={clsx(
-            queue.active > 0 ? 'text-accent-cyan' : 'text-text-dim',
+            queue.active > 0 ? "text-accent-cyan" : "text-text-dim",
           )}
           title="active"
         >
@@ -313,7 +310,7 @@ function QueueChip({ queue }: QueueChipProps) {
         </span>
         <span
           className={clsx(
-            queue.waiting > 0 ? 'text-accent-amber' : 'text-text-dim',
+            queue.waiting > 0 ? "text-accent-amber" : "text-text-dim",
           )}
           title="waiting"
         >
@@ -321,7 +318,7 @@ function QueueChip({ queue }: QueueChipProps) {
         </span>
         <span
           className={clsx(
-            queue.failed > 0 ? 'text-accent-rose' : 'text-text-dim',
+            queue.failed > 0 ? "text-accent-rose" : "text-text-dim",
           )}
           title="failed"
         >
@@ -340,8 +337,8 @@ function QueueChip({ queue }: QueueChipProps) {
  */
 function humanizeQueueName(name: string): string {
   return name
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
     .trim();
 }
 
@@ -350,6 +347,6 @@ function humanizeQueueName(name: string): string {
  * for missing values so the chips stay aligned.
  */
 function fmtCount(n: number | null | undefined): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
   return n.toLocaleString();
 }

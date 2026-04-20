@@ -2,7 +2,7 @@
 
 A small, self-hosted dashboard that monitors the pieces of a homelab: a Proxmox host, its VMs, Docker containers (Portainer, Nextcloud, Immich, Postgres), and a Unifi UNAS. Read-only, LAN-only, no auth. Dark techy look.
 
-## Current status: v0.13.1 — sectioned layout
+## Current status: v0.13.2 — sectioned layout
 
 The homepage is now organised into a fixed sequence of sections (each with its own TypeScript module under `frontend/src/sections/`):
 
