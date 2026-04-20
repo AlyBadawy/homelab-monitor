@@ -218,7 +218,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.13.3 · sectioned layout
+          v0.13.4 · sectioned layout
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

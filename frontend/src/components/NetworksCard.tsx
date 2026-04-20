@@ -1,6 +1,6 @@
-import clsx from 'clsx';
-import { Network } from 'lucide-react';
-import type { DockerNetworkSummary } from '../lib/api';
+import clsx from "clsx";
+import { Network } from "lucide-react";
+import type { DockerNetworkSummary } from "../lib/api";
 
 interface NetworksCardProps {
   endpointName: string;
@@ -48,7 +48,7 @@ export function NetworksCard({ endpointName, networks }: NetworksCardProps) {
           <NetworkRow key={n.id} n={n} dim={false} />
         ))}
         {builtIn.length > 0 && user.length > 0 && (
-          <div className="pt-2 mt-2 border-t border-border/60" />
+          <div className="py-2 my-2 border-t border-border/60" />
         )}
         {builtIn.map((n) => (
           <NetworkRow key={n.id} n={n} dim />
@@ -62,10 +62,10 @@ function NetworkRow({ n, dim }: { n: DockerNetworkSummary; dim: boolean }) {
   return (
     <div
       className={clsx(
-        'grid gap-x-3 gap-y-0.5 items-baseline',
+        "grid gap-x-3 gap-y-0.5 items-baseline",
         // mobile: stacked; lg+: inline columns
-        'grid-cols-[1fr_auto] lg:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]',
-        dim && 'opacity-60',
+        "grid-cols-[1fr_auto] lg:grid-cols-[minmax(0,1.2fr)_auto_auto_minmax(0,1.4fr)_auto]",
+        dim && "opacity-60",
       )}
     >
       <span className="font-mono text-xs text-text truncate" title={n.name}>
@@ -80,18 +80,21 @@ function NetworkRow({ n, dim }: { n: DockerNetworkSummary; dim: boolean }) {
       {/* second mobile row = meta line; on lg+ these become dedicated columns */}
       <span
         className={clsx(
-          'font-mono text-[0.65rem] uppercase tracking-[0.15em] text-text-dim',
-          'col-span-2 lg:col-span-1',
+          "font-mono text-[0.65rem] uppercase tracking-[0.15em] text-text-dim",
+          "col-span-2 lg:col-span-1",
         )}
       >
-        {n.driver}
-        {n.internal && ' · internal'}
+        {n.driver ?? "—"}
+        {n.internal && " · internal"}
       </span>
       <span className="hidden lg:inline font-mono text-[0.65rem] uppercase tracking-[0.15em] text-text-dim">
         {n.scope}
       </span>
-      <span className="hidden lg:inline font-mono text-[0.65rem] text-text-dim truncate" title={n.subnet ?? undefined}>
-        {n.subnet ?? '—'}
+      <span
+        className="hidden lg:inline font-mono text-[0.65rem] text-text-dim truncate"
+        title={n.subnet ?? undefined}
+      >
+        {n.subnet ?? "—"}
       </span>
       <span className="hidden lg:inline font-mono text-[0.65rem] text-text-muted justify-self-end">
         {n.attachedCount} attached

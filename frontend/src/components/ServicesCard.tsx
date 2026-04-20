@@ -5,19 +5,19 @@ import {
   useRef,
   useState,
   type FormEvent,
-} from 'react';
-import clsx from 'clsx';
-import { Globe, Plus, Trash2, X } from 'lucide-react';
+} from "react";
+import clsx from "clsx";
+import { Globe, Plus, Trash2, X } from "lucide-react";
 import {
   createServiceCheck,
   deleteServiceCheck,
   listServiceChecks,
   type ServiceCheck,
   type TargetSummary,
-} from '../lib/api';
-import { useHistory } from '../lib/useHistory';
-import { Sparkline } from './Sparkline';
-import { UptimeStrip, availabilityPct } from './UptimeStrip';
+} from "../lib/api";
+import { useHistory } from "../lib/useHistory";
+import { Sparkline } from "./Sparkline";
+import { UptimeStrip, availabilityPct } from "./UptimeStrip";
 
 interface ServicesCardProps {
   targets: TargetSummary[];
@@ -63,8 +63,10 @@ export function ServicesCard({ targets }: ServicesCardProps) {
   const targetById = useMemo(() => {
     const m = new Map<string, TargetSummary>();
     for (const t of targets) {
-      if (t.kind !== 'service') continue;
-      const id = t.id.startsWith('service:') ? t.id.slice('service:'.length) : t.id;
+      if (t.kind !== "service") continue;
+      const id = t.id.startsWith("service:")
+        ? t.id.slice("service:".length)
+        : t.id;
       m.set(id, t);
     }
     return m;
@@ -160,11 +162,11 @@ function ServiceRowGrid({
       className={clsx(
         // Grid only kicks in at lg+. Default is unused — consumers that want
         // the grid pass `className="hidden lg:grid"` so it's hidden on mobile.
-        'lg:grid lg:items-center lg:gap-x-4 lg:py-2',
-        'lg:grid-cols-[minmax(180px,1fr)_70px_140px_60px_180px_40px]',
+        "lg:grid lg:items-center lg:gap-x-4 lg:py-2",
+        "lg:grid-cols-[minmax(180px,1fr)_70px_140px_60px_180px_40px]",
         header &&
-          'lg:border-b lg:border-border-strong lg:pb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim',
-        !header && 'text-sm',
+          "lg:border-b lg:border-border-strong lg:pb-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-dim",
+        !header && "text-sm",
         className,
       )}
     >
@@ -175,13 +177,13 @@ function ServiceRowGrid({
 
 function HeaderCell({
   children,
-  align = 'left',
+  align = "left",
 }: {
   children: React.ReactNode;
-  align?: 'left' | 'right';
+  align?: "left" | "right";
 }) {
   return (
-    <div className={align === 'right' ? 'text-right' : 'text-left'}>
+    <div className={align === "right" ? "text-right" : "text-left"}>
       {children}
     </div>
   );
@@ -206,7 +208,7 @@ function ServiceRow({
 }) {
   const { series } = useHistory(
     `service:${check.id}`,
-    ['http_latency_ms', 'http_up'],
+    ["http_latency_ms", "http_up"],
     { points: 300, refreshMs: 30_000 },
   );
   const latency = series.http_latency_ms ?? [];
@@ -219,20 +221,33 @@ function ServiceRow({
       <ServiceRowGrid className="hidden lg:grid">
         {/* Col 1 — name + URL */}
         <div className="min-w-0">
-          <div className="truncate font-mono text-xs text-text" title={check.name}>
+          <div
+            className="truncate font-mono text-xs text-text"
+            title={check.name}
+          >
             {check.name}
           </div>
           <div
             className="truncate font-mono text-[0.65rem] text-text-dim"
             title={check.url}
           >
-            {check.url}
+            <a
+              href={check.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              {check.url}
+            </a>
           </div>
         </div>
 
         {/* Col 2 — current latency */}
         <div className="text-right font-mono text-xs tabular-nums text-text-muted">
-          <LatencyBadge ms={target?.latencyMs ?? null} status={target?.status ?? 'unknown'} />
+          <LatencyBadge
+            ms={target?.latencyMs ?? null}
+            status={target?.status ?? "unknown"}
+          />
         </div>
 
         {/* Col 3 — 24h latency sparkline */}
@@ -296,7 +311,10 @@ function ServiceRow({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <MobileMetric label="Latency">
             <div className="flex items-center justify-between gap-2">
-              <LatencyBadge ms={target?.latencyMs ?? null} status={target?.status ?? 'unknown'} />
+              <LatencyBadge
+                ms={target?.latencyMs ?? null}
+                status={target?.status ?? "unknown"}
+              />
             </div>
             <Sparkline
               points={latency}
@@ -361,8 +379,8 @@ function AddRow({
   onCancel: () => void;
   onCreated: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -377,7 +395,7 @@ function AddRow({
     const trimmedName = name.trim();
     const trimmedUrl = url.trim();
     if (!trimmedName || !trimmedUrl) {
-      setErr('name and URL are required');
+      setErr("name and URL are required");
       return;
     }
     setSubmitting(true);
@@ -412,7 +430,9 @@ function AddRow({
             type="url"
           />
           {err && (
-            <div className="font-mono text-[0.65rem] text-accent-rose">{err}</div>
+            <div className="font-mono text-[0.65rem] text-accent-rose">
+              {err}
+            </div>
           )}
         </div>
 
@@ -423,7 +443,7 @@ function AddRow({
             className="rounded-md border border-accent-cyan/60 px-3 py-1.5 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-accent-cyan transition-colors hover:bg-accent-cyan/10 disabled:opacity-50"
             title="Save (Enter)"
           >
-            {submitting ? '…' : 'save'}
+            {submitting ? "…" : "save"}
           </button>
           <button
             type="button"
@@ -497,10 +517,10 @@ function DeleteButton({
       title={armed ? `Click again to remove ${name}` : `Stop tracking ${name}`}
       aria-label={armed ? `Confirm delete ${name}` : `Delete ${name}`}
       className={clsx(
-        'shrink-0 rounded-md border p-1.5 transition-colors disabled:opacity-50',
+        "shrink-0 rounded-md border p-1.5 transition-colors disabled:opacity-50",
         armed
-          ? 'border-accent-rose bg-accent-rose/15 text-accent-rose hover:bg-accent-rose/25'
-          : 'border-border text-text-muted hover:border-accent-rose/60 hover:text-accent-rose',
+          ? "border-accent-rose bg-accent-rose/15 text-accent-rose hover:bg-accent-rose/25"
+          : "border-border text-text-muted hover:border-accent-rose/60 hover:text-accent-rose",
       )}
     >
       <Trash2 className="h-3.5 w-3.5" />
@@ -515,20 +535,25 @@ function LatencyBadge({
   status,
 }: {
   ms: number | null;
-  status: TargetSummary['status'];
+  status: TargetSummary["status"];
 }) {
-  if (status === 'offline' || status === 'unknown') {
-    return <span className="font-mono text-xs tabular-nums text-text-dim">—</span>;
+  if (status === "offline" || status === "unknown") {
+    return (
+      <span className="font-mono text-xs tabular-nums text-text-dim">—</span>
+    );
   }
-  if (ms === null) return <span className="font-mono text-xs tabular-nums text-text-dim">—</span>;
+  if (ms === null)
+    return (
+      <span className="font-mono text-xs tabular-nums text-text-dim">—</span>
+    );
   const tone =
     ms >= 2000
-      ? 'text-accent-rose'
+      ? "text-accent-rose"
       : ms >= 500
-        ? 'text-accent-amber'
-        : 'text-text';
+        ? "text-accent-amber"
+        : "text-text";
   return (
-    <span className={clsx('font-mono text-xs tabular-nums', tone)}>
+    <span className={clsx("font-mono text-xs tabular-nums", tone)}>
       {Math.round(ms)} ms
     </span>
   );
@@ -540,14 +565,14 @@ function HttpCodeBadge({ code }: { code: number | null }) {
   }
   const tone =
     code >= 500
-      ? 'border-accent-rose/60 text-accent-rose'
+      ? "border-accent-rose/60 text-accent-rose"
       : code >= 400
-        ? 'border-accent-amber/60 text-accent-amber'
-        : 'border-accent-emerald/50 text-accent-emerald';
+        ? "border-accent-amber/60 text-accent-amber"
+        : "border-accent-emerald/50 text-accent-emerald";
   return (
     <span
       className={clsx(
-        'inline-block rounded border px-1.5 py-0.5 font-mono text-[0.7rem] tabular-nums',
+        "inline-block rounded border px-1.5 py-0.5 font-mono text-[0.7rem] tabular-nums",
         tone,
       )}
     >
@@ -558,21 +583,19 @@ function HttpCodeBadge({ code }: { code: number | null }) {
 
 function AvailabilityBadge({ value }: { value: number | null }) {
   if (value === null) {
-    return (
-      <span className="font-mono text-[0.65rem] text-text-dim">—</span>
-    );
+    return <span className="font-mono text-[0.65rem] text-text-dim">—</span>;
   }
   const pct = value * 100;
   const tone =
     pct >= 99.5
-      ? 'text-accent-emerald'
+      ? "text-accent-emerald"
       : pct >= 95
-        ? 'text-accent-amber'
-        : 'text-accent-rose';
+        ? "text-accent-amber"
+        : "text-accent-rose";
   // 3 decimals feels overprecise; 1 decimal reads like a status page.
   return (
-    <span className={clsx('font-mono text-[0.7rem] tabular-nums', tone)}>
-      {pct >= 99.95 ? '100' : pct.toFixed(1)}%
+    <span className={clsx("font-mono text-[0.7rem] tabular-nums", tone)}>
+      {pct >= 99.95 ? "100" : pct.toFixed(1)}%
     </span>
   );
 }

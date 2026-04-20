@@ -1,7 +1,7 @@
-import clsx from 'clsx';
-import { AlertTriangle, Database as DatabaseIcon } from 'lucide-react';
-import type { DockerVolumeSummary } from '../lib/api';
-import { fmtBytes, fmtRelative } from '../lib/format';
+import clsx from "clsx";
+import { AlertTriangle, Database as DatabaseIcon } from "lucide-react";
+import type { DockerVolumeSummary } from "../lib/api";
+import { fmtBytes, fmtRelative } from "../lib/format";
 
 interface VolumesCardProps {
   endpointName: string;
@@ -72,7 +72,7 @@ export function VolumesCard({
           <VolumeRow key={v.name} v={v} dim={false} />
         ))}
         {orphan.length > 0 && used.length > 0 && (
-          <div className="pt-2 mt-2 border-t border-border/60" />
+          <div className="py-2 my-2 border-t border-border/60" />
         )}
         {orphan.map((v) => (
           <VolumeRow key={v.name} v={v} dim />
@@ -84,14 +84,14 @@ export function VolumesCard({
 
 function VolumeRow({ v, dim }: { v: DockerVolumeSummary; dim: boolean }) {
   const refLabel =
-    v.refCount == null ? '—' : v.refCount === 0 ? 'unused' : `${v.refCount}×`;
+    v.refCount == null ? "—" : v.refCount === 0 ? "unused" : `${v.refCount}×`;
 
   return (
     <div
       className={clsx(
-        'grid gap-x-3 gap-y-0.5 items-baseline',
-        'grid-cols-[1fr_auto] lg:grid-cols-[minmax(0,1.6fr)_auto_minmax(0,1fr)_auto_auto]',
-        dim && 'opacity-60',
+        "grid gap-x-3 gap-y-0.5 items-baseline",
+        "grid-cols-[1fr_auto] lg:grid-cols-[minmax(0,1.6fr)_auto_minmax(0,1fr)_auto_auto]",
+        dim && "opacity-60",
       )}
     >
       <span className="font-mono text-xs text-text truncate" title={v.name}>
@@ -106,23 +106,24 @@ function VolumeRow({ v, dim }: { v: DockerVolumeSummary; dim: boolean }) {
       {/* second row on mobile = meta; on lg+ these are columns */}
       <span
         className={clsx(
-          'font-mono text-[0.65rem] uppercase tracking-[0.15em] text-text-dim',
-          'col-span-2 lg:col-span-1',
+          "font-mono text-[0.65rem] uppercase tracking-[0.15em] text-text-dim",
+          "col-span-2 lg:col-span-1",
         )}
       >
-        {v.driver}
-        {v.stack && (
+        {v.stack ? (
           <span className="ml-2 normal-case tracking-normal text-accent-cyan">
             {v.stack}
           </span>
-        )}
-        {!v.stack && (
+        ) : (
           <span className="ml-2 normal-case tracking-normal text-text-dim">
             unstacked
           </span>
         )}
       </span>
-      <span className="hidden lg:inline font-mono text-[0.65rem] text-text-dim truncate" title={v.mountpoint}>
+      <span
+        className="hidden lg:inline font-mono text-[0.65rem] text-text-dim truncate"
+        title={v.mountpoint}
+      >
         {v.mountpoint}
       </span>
       <span className="hidden lg:inline font-mono text-[0.65rem] text-text-muted justify-self-end">
@@ -130,8 +131,8 @@ function VolumeRow({ v, dim }: { v: DockerVolumeSummary; dim: boolean }) {
       </span>
       <span
         className={clsx(
-          'hidden lg:inline font-mono text-[0.65rem] justify-self-end',
-          v.refCount === 0 ? 'text-text-dim' : 'text-text-muted',
+          "hidden lg:inline font-mono text-[0.65rem] justify-self-end",
+          v.refCount === 0 ? "text-text-dim" : "text-text-muted",
         )}
       >
         {refLabel}

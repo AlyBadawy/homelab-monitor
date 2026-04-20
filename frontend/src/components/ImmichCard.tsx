@@ -94,25 +94,9 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
           <div className="rounded-lg border border-border bg-bg-700 p-2 text-accent-cyan">
             <ImageIcon className="h-4 w-4" />
           </div>
-          <div>
-            <div className="card-title">IMMICH</div>
-            <div className="font-semibold text-text">{target.name}</div>
-          </div>
+          <div className="card-title">IMMICH</div>
         </div>
         <div className="flex items-center gap-2">
-          <span
-            className={clsx(
-              "rounded border px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em]",
-              backlogToneClass[backlogTone],
-            )}
-            title={
-              jobsFailed > 0
-                ? `${jobsFailed.toLocaleString()} failed job(s), ${jobsBacklog.toLocaleString()} queued`
-                : `${jobsBacklog.toLocaleString()} queued job(s)`
-            }
-          >
-            Jobs {jobsBacklog.toLocaleString()}
-          </span>
           <StatusPill status={target.status} />
           {clickable && (
             <Expand
@@ -123,14 +107,33 @@ export function ImmichCard({ target, onSelect }: ImmichCardProps) {
         </div>
       </div>
 
-      {target.url && (
+      {(target.url || target.immich?.jobs) && (
         <div className="mb-3">
-          <div
-            className="font-mono text-[0.7rem] text-text-dim truncate"
-            title={target.url}
-          >
-            {target.url}
-          </div>
+          {target.url && (
+            <div
+              className="font-mono text-[0.7rem] text-text-dim truncate"
+              title={target.url}
+            >
+              {target.url}
+            </div>
+          )}
+          {target.immich?.jobs && (
+            <div className="font-mono text-[0.7rem] text-text-dim">
+              <span
+                className={clsx(
+                  "rounded border px-1.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em]",
+                  backlogToneClass[backlogTone],
+                )}
+                title={
+                  jobsFailed > 0
+                    ? `${jobsFailed.toLocaleString()} failed job(s), ${jobsBacklog.toLocaleString()} queued`
+                    : `${jobsBacklog.toLocaleString()} queued job(s)`
+                }
+              >
+                Jobs {jobsBacklog.toLocaleString()}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

@@ -7,12 +7,12 @@ import {
   Package,
   Clock,
   Expand,
-} from 'lucide-react';
-import type { TargetSummary } from '../lib/api';
-import { StatusPill } from './StatusPill';
-import { MiniStat } from './MiniStat';
-import { useHistory } from '../lib/useHistory';
-import { fmtBytes, fmtUptime } from '../lib/format';
+} from "lucide-react";
+import type { TargetSummary } from "../lib/api";
+import { StatusPill } from "./StatusPill";
+import { MiniStat } from "./MiniStat";
+import { useHistory } from "../lib/useHistory";
+import { fmtBytes, fmtUptime } from "../lib/format";
 
 interface NextcloudCardProps {
   target: TargetSummary;
@@ -41,7 +41,7 @@ export function NextcloudCard({ target, onSelect }: NextcloudCardProps) {
   // our SQLite history DB — recorded by NextcloudPoller.recordHistory.
   const { series } = useHistory(
     target.id,
-    ['storage_free_bytes', 'files_count', 'active_users_5m', 'active_users_1h'],
+    ["storage_free_bytes", "files_count", "active_users_5m", "active_users_1h"],
     { points: 120, refreshMs: 30_000 },
   );
 
@@ -54,25 +54,25 @@ export function NextcloudCard({ target, onSelect }: NextcloudCardProps) {
   const handleOpen = () => onSelect?.(target);
 
   const updates = nc?.appsWithUpdates ?? null;
-  const updatesTone: 'muted' | 'amber' = (updates ?? 0) > 0 ? 'amber' : 'muted';
+  const updatesTone: "muted" | "amber" = (updates ?? 0) > 0 ? "amber" : "muted";
 
   return (
     <div
       className={`card group ${
-        clickable ? 'cursor-pointer focus-within:border-border-strong' : ''
+        clickable ? "cursor-pointer focus-within:border-border-strong" : ""
       }`}
       onClick={clickable ? handleOpen : undefined}
       onKeyDown={
         clickable
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 handleOpen();
               }
             }
           : undefined
       }
-      role={clickable ? 'button' : undefined}
+      role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `Open history for ${target.name}` : undefined}
     >
@@ -84,10 +84,7 @@ export function NextcloudCard({ target, onSelect }: NextcloudCardProps) {
           <div className="rounded-lg border border-border bg-bg-700 p-2 text-accent-cyan">
             <Cloud className="h-4 w-4" />
           </div>
-          <div>
-            <div className="card-title">NEXTCLOUD</div>
-            <div className="font-semibold text-text">{target.name}</div>
-          </div>
+          <div className="card-title">NEXTCLOUD</div>
         </div>
         <div className="flex items-center gap-2">
           <StatusPill status={target.status} />
@@ -210,6 +207,6 @@ export function NextcloudCard({ target, onSelect }: NextcloudCardProps) {
  * for missing values so the chips stay aligned.
  */
 function fmtCount(n: number | null | undefined): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
   return n.toLocaleString();
 }
