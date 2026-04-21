@@ -1,6 +1,6 @@
 {
   "name": "homelab-monitor-backend",
-  "version": "0.13.4",
+  "version": "0.14.0",
   "private": true,
   "description": "Homelab monitor backend — polls services, stores 24h history in SQLite, serves a REST API.",
   "main": "dist/index.js",
