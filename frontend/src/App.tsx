@@ -17,6 +17,7 @@ import {
   type SummaryErrors,
   type TargetSummary,
 } from "./lib/api";
+import { VERSION } from "./version";
 
 export default function App() {
   const [targets, setTargets] = useState<TargetSummary[]>([]);
@@ -218,7 +219,7 @@ export default function App() {
       <footer className="relative z-10 mx-auto max-w-[1600px] px-6 py-6">
         <div className="divider" />
         <p className="mt-4 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
-          v0.14.0 · sectioned layout
+          Homelab monitor · v{VERSION}
         </p>
         <p className="mt-2 text-center font-mono text-[0.65rem] uppercase tracking-[0.24em] text-text-dim">
           Developed by{" "}

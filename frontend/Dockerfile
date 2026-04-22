@@ -2,6 +2,11 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+# Copy git history and generate version files from latest git tag
+COPY .git ./.git
+COPY scripts/generate-version.js ./scripts/
+RUN apk add --no-cache git && node scripts/generate-version.js
+
 COPY package.json ./
 RUN npm install
 

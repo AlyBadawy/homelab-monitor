@@ -3,7 +3,12 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # better-sqlite3 is a native module — needs build tools in the builder.
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ git
+
+# Copy git history and generate version files from latest git tag
+COPY .git ./.git
+COPY scripts/generate-version.js ./scripts/
+RUN node scripts/generate-version.js
 
 COPY package.json ./
 RUN npm install

@@ -5,6 +5,7 @@
   "description": "Homelab monitor backend — polls services, stores 24h history in SQLite, serves a REST API.",
   "main": "dist/index.js",
   "scripts": {
+    "preinstall": "node ../scripts/generate-version.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",

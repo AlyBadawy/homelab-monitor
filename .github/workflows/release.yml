@@ -1,0 +1,52 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
+      - name: Build backend image
+        run: |
+          docker build \
+            -t ghcr.io/${{ github.repository_owner }}/homelab-monitor-backend:${VERSION} \
+            -t ghcr.io/${{ github.repository_owner }}/homelab-monitor-backend:latest \
+            ./backend
+
+      - name: Push backend
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/homelab-monitor-backend:${VERSION}
+          docker push ghcr.io/${{ github.repository_owner }}/homelab-monitor-backend:latest
+
+      - name: Build frontend image
+        run: |
+          docker build \
+            -t ghcr.io/${{ github.repository_owner }}/homelab-monitor-frontend:${VERSION} \
+            -t ghcr.io/${{ github.repository_owner }}/homelab-monitor-frontend:latest \
+            ./frontend
+
+      - name: Push frontend
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/homelab-monitor-frontend:${VERSION}
+          docker push ghcr.io/${{ github.repository_owner }}/homelab-monitor-frontend:latest

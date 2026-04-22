@@ -7,3 +7,7 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Generated version files
+backend/src/version.ts
+frontend/src/version.ts
